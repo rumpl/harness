@@ -4,9 +4,9 @@ import "github.com/rumpl/harness"
 
 // parseStreamLine handles the Pi JSON streaming format.
 // It recognises three event shapes:
-//   - {"type":"message_update","content":[...]} → text events
+//   - {"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"..."}} → text events
 //   - {"type":"tool_execution_start",...} → tool_call events
-//   - {"type":"agent_end","last_assistant_message":"..."} → result events
+//   - {"type":"agent_end","messages":[...]} → result events
 func parseStreamLine(line string) []harness.Event {
 	obj, ok := harness.ParseJSON(line)
 	if !ok {
@@ -27,32 +27,19 @@ func parseStreamLine(line string) []harness.Event {
 }
 
 func parseMessageUpdate(obj map[string]any) []harness.Event {
-	content, ok := obj["content"].([]any)
+	ev, ok := obj["assistantMessageEvent"].(map[string]any)
 	if !ok {
 		return nil
 	}
-
-	var texts []string
-	for _, raw := range content {
-		block, ok := raw.(map[string]any)
-		if !ok {
-			continue
-		}
-		if bt, _ := block["type"].(string); bt == "text_delta" {
-			if t, ok := block["text"].(string); ok {
-				texts = append(texts, t)
-			}
-		}
-	}
-	if len(texts) == 0 {
+	evType, _ := ev["type"].(string)
+	if evType != "text_delta" {
 		return nil
 	}
-
-	combined := ""
-	for _, t := range texts {
-		combined += t
+	delta, ok := ev["delta"].(string)
+	if !ok || delta == "" {
+		return nil
 	}
-	return []harness.Event{{Type: harness.EventText, Text: combined}}
+	return []harness.Event{{Type: harness.EventText, Text: delta}}
 }
 
 func parseToolExecution(obj map[string]any) []harness.Event {
@@ -80,13 +67,53 @@ func parseToolExecution(obj map[string]any) []harness.Event {
 }
 
 func parseAgentEnd(obj map[string]any) []harness.Event {
-	result, ok := obj["last_assistant_message"].(string)
+	msgs, ok := obj["messages"].([]any)
 	if !ok {
 		return nil
 	}
+
+	// Find the last assistant message and extract its text content.
+	var result string
+	var lastAssistant map[string]any
+	for i := len(msgs) - 1; i >= 0; i-- {
+		msg, ok := msgs[i].(map[string]any)
+		if !ok {
+			continue
+		}
+		if role, _ := msg["role"].(string); role == "assistant" {
+			lastAssistant = msg
+			result = extractTextContent(msg)
+			break
+		}
+	}
+	if lastAssistant == nil {
+		return nil
+	}
+
 	return []harness.Event{{
 		Type:   harness.EventResult,
 		Result: result,
-		Usage:  harness.ExtractUsage(obj),
+		Usage:  harness.ExtractPiUsage(lastAssistant),
 	}}
+}
+
+// extractTextContent concatenates all text blocks from a message's content array.
+func extractTextContent(msg map[string]any) string {
+	content, ok := msg["content"].([]any)
+	if !ok {
+		return ""
+	}
+	var out string
+	for _, raw := range content {
+		block, ok := raw.(map[string]any)
+		if !ok {
+			continue
+		}
+		if bt, _ := block["type"].(string); bt == "text" {
+			if t, ok := block["text"].(string); ok {
+				out += t
+			}
+		}
+	}
+	return out
 }

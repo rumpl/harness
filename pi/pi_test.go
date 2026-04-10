@@ -57,17 +57,42 @@ func TestInteractiveArgs(t *testing.T) {
 func TestParseStreamLine(t *testing.T) {
 	p := New("claude-sonnet-4-6")
 
-	t.Run("extracts text from message_update", func(t *testing.T) {
+	t.Run("extracts text from message_update text_delta", func(t *testing.T) {
 		line := jsonStr(map[string]any{
 			"type": "message_update",
-			"content": []any{
-				map[string]any{"type": "text_delta", "text": "Hello world"},
+			"assistantMessageEvent": map[string]any{
+				"type":         "text_delta",
+				"contentIndex": float64(0),
+				"delta":        "Hello world",
 			},
 		})
 		events := p.ParseStreamLine(line)
 		assertEqual(t, events, []harness.Event{
 			{Type: harness.EventText, Text: "Hello world"},
 		})
+	})
+
+	t.Run("skips message_update with non-text_delta event", func(t *testing.T) {
+		line := jsonStr(map[string]any{
+			"type": "message_update",
+			"assistantMessageEvent": map[string]any{
+				"type": "text_start",
+			},
+		})
+		events := p.ParseStreamLine(line)
+		if len(events) != 0 {
+			t.Errorf("expected empty events, got %+v", events)
+		}
+	})
+
+	t.Run("skips message_update without assistantMessageEvent", func(t *testing.T) {
+		line := jsonStr(map[string]any{
+			"type": "message_update",
+		})
+		events := p.ParseStreamLine(line)
+		if len(events) != 0 {
+			t.Errorf("expected empty events, got %+v", events)
+		}
 	})
 
 	t.Run("extracts tool call from tool_execution_start", func(t *testing.T) {
@@ -96,8 +121,21 @@ func TestParseStreamLine(t *testing.T) {
 
 	t.Run("extracts result from agent_end", func(t *testing.T) {
 		line := jsonStr(map[string]any{
-			"type":                   "agent_end",
-			"last_assistant_message": "Final answer",
+			"type": "agent_end",
+			"messages": []any{
+				map[string]any{
+					"role": "user",
+					"content": []any{
+						map[string]any{"type": "text", "text": "Hello"},
+					},
+				},
+				map[string]any{
+					"role": "assistant",
+					"content": []any{
+						map[string]any{"type": "text", "text": "Final answer"},
+					},
+				},
+			},
 		})
 		events := p.ParseStreamLine(line)
 		if len(events) != 1 || events[0].Type != harness.EventResult || events[0].Result != "Final answer" {
@@ -110,17 +148,29 @@ func TestParseStreamLine(t *testing.T) {
 
 	t.Run("extracts usage from agent_end", func(t *testing.T) {
 		line := jsonStr(map[string]any{
-			"type":                   "agent_end",
-			"last_assistant_message": "Done",
-			"usage": map[string]any{
-				"input_tokens":                float64(100),
-				"output_tokens":               float64(50),
-				"cache_read_input_tokens":     float64(10),
-				"cache_creation_input_tokens": float64(5),
+			"type": "agent_end",
+			"messages": []any{
+				map[string]any{
+					"role": "assistant",
+					"content": []any{
+						map[string]any{"type": "text", "text": "Done"},
+					},
+					"usage": map[string]any{
+						"input":       float64(100),
+						"output":      float64(50),
+						"cacheRead":   float64(10),
+						"cacheWrite":  float64(5),
+						"totalTokens": float64(150),
+						"cost": map[string]any{
+							"input":      float64(0.003),
+							"output":     float64(0.006),
+							"cacheRead":  float64(0),
+							"cacheWrite": float64(0),
+							"total":      float64(0.01),
+						},
+					},
+				},
 			},
-			"total_cost_usd": float64(0.01),
-			"num_turns":      float64(3),
-			"duration_ms":    float64(5000),
 		})
 		events := p.ParseStreamLine(line)
 		if len(events) != 1 {
@@ -132,6 +182,9 @@ func TestParseStreamLine(t *testing.T) {
 		}
 		if u.InputTokens != 100 || u.OutputTokens != 50 {
 			t.Errorf("unexpected tokens: %+v", u)
+		}
+		if u.CacheReadInputTokens != 10 {
+			t.Errorf("CacheReadInputTokens = %d, want 10", u.CacheReadInputTokens)
 		}
 		if u.TotalCostUSD != 0.01 {
 			t.Errorf("TotalCostUSD = %f, want 0.01", u.TotalCostUSD)
@@ -160,8 +213,23 @@ func TestParseStreamLine(t *testing.T) {
 		}
 	})
 
-	t.Run("handles message_update with missing content", func(t *testing.T) {
-		line := jsonStr(map[string]any{"type": "message_update"})
+	t.Run("handles agent_end with no assistant messages", func(t *testing.T) {
+		line := jsonStr(map[string]any{
+			"type": "agent_end",
+			"messages": []any{
+				map[string]any{
+					"role":    "user",
+					"content": []any{map[string]any{"type": "text", "text": "Hello"}},
+				},
+			},
+		})
+		if events := p.ParseStreamLine(line); len(events) != 0 {
+			t.Errorf("expected empty, got %+v", events)
+		}
+	})
+
+	t.Run("handles agent_end with missing messages", func(t *testing.T) {
+		line := jsonStr(map[string]any{"type": "agent_end"})
 		if events := p.ParseStreamLine(line); len(events) != 0 {
 			t.Errorf("expected empty, got %+v", events)
 		}

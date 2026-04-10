@@ -61,7 +61,7 @@ func TestParseStreamLine(t *testing.T) {
 	t.Run("extracts text and result from item.completed agent_message", func(t *testing.T) {
 		line := jsonStr(map[string]any{
 			"type": "item.completed",
-			"item": map[string]any{"type": "agent_message", "content": "Hello world"},
+			"item": map[string]any{"type": "agent_message", "text": "Hello world"},
 		})
 		events := p.ParseStreamLine(line)
 		assertEqual(t, events, []harness.Event{
@@ -81,7 +81,35 @@ func TestParseStreamLine(t *testing.T) {
 		})
 	})
 
-	t.Run("skips turn.completed events", func(t *testing.T) {
+	t.Run("extracts usage from turn.completed", func(t *testing.T) {
+		line := jsonStr(map[string]any{
+			"type": "turn.completed",
+			"usage": map[string]any{
+				"input_tokens":        float64(8975),
+				"cached_input_tokens": float64(0),
+				"output_tokens":       float64(14),
+			},
+		})
+		events := p.ParseStreamLine(line)
+		if len(events) != 1 {
+			t.Fatalf("expected 1 event, got %d", len(events))
+		}
+		if events[0].Type != harness.EventResult {
+			t.Errorf("Type = %q, want %q", events[0].Type, harness.EventResult)
+		}
+		u := events[0].Usage
+		if u == nil {
+			t.Fatal("expected usage, got nil")
+		}
+		if u.InputTokens != 8975 {
+			t.Errorf("InputTokens = %d, want 8975", u.InputTokens)
+		}
+		if u.OutputTokens != 14 {
+			t.Errorf("OutputTokens = %d, want 14", u.OutputTokens)
+		}
+	})
+
+	t.Run("returns empty for turn.completed without usage", func(t *testing.T) {
 		line := jsonStr(map[string]any{"type": "turn.completed"})
 		if events := p.ParseStreamLine(line); len(events) != 0 {
 			t.Errorf("expected empty, got %+v", events)
@@ -110,7 +138,7 @@ func TestParseStreamLine(t *testing.T) {
 		}
 	})
 
-	t.Run("handles item.completed with missing content", func(t *testing.T) {
+	t.Run("handles item.completed with missing text", func(t *testing.T) {
 		line := jsonStr(map[string]any{
 			"type": "item.completed",
 			"item": map[string]any{"type": "agent_message"},
@@ -133,7 +161,7 @@ func TestParseStreamLine(t *testing.T) {
 	t.Run("handles item.completed with non-agent_message type", func(t *testing.T) {
 		line := jsonStr(map[string]any{
 			"type": "item.completed",
-			"item": map[string]any{"type": "other_type", "content": "foo"},
+			"item": map[string]any{"type": "other_type", "text": "foo"},
 		})
 		if events := p.ParseStreamLine(line); len(events) != 0 {
 			t.Errorf("expected empty, got %+v", events)

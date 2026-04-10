@@ -91,3 +91,66 @@ func jsonFloatOr(m map[string]any, key string, fallback float64) float64 {
 	}
 	return fallback
 }
+
+// ExtractPiUsage pulls token usage from a Pi assistant message object.
+// Pi uses a different schema: {"usage":{"input":N,"output":N,"cacheRead":N,"cacheWrite":N,"totalTokens":N,"cost":{...}}}
+func ExtractPiUsage(msg map[string]any) *Usage {
+	raw, ok := msg["usage"]
+	if !ok {
+		return nil
+	}
+	usageMap, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	inputTokens, ok := jsonNumber(usageMap, "input")
+	if !ok {
+		return nil
+	}
+	outputTokens, ok := jsonNumber(usageMap, "output")
+	if !ok {
+		return nil
+	}
+
+	u := &Usage{
+		InputTokens:          inputTokens,
+		OutputTokens:         outputTokens,
+		CacheReadInputTokens: jsonNumberOr(usageMap, "cacheRead", 0),
+	}
+
+	// Cost info is nested: usage.cost.total
+	if costMap, ok := usageMap["cost"].(map[string]any); ok {
+		u.TotalCostUSD = jsonFloatOr(costMap, "total", 0)
+	}
+
+	return u
+}
+
+// ExtractCodexUsage pulls token usage from a Codex turn.completed object.
+// Codex uses: {"usage":{"input_tokens":N,"output_tokens":N,"cached_input_tokens":N}}
+func ExtractCodexUsage(obj map[string]any) *Usage {
+	raw, ok := obj["usage"]
+	if !ok {
+		return nil
+	}
+	usageMap, ok := raw.(map[string]any)
+	if !ok {
+		return nil
+	}
+
+	inputTokens, ok := jsonNumber(usageMap, "input_tokens")
+	if !ok {
+		return nil
+	}
+	outputTokens, ok := jsonNumber(usageMap, "output_tokens")
+	if !ok {
+		return nil
+	}
+
+	return &Usage{
+		InputTokens:          inputTokens,
+		OutputTokens:         outputTokens,
+		CacheReadInputTokens: jsonNumberOr(usageMap, "cached_input_tokens", 0),
+	}
+}
