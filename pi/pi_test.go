@@ -1,0 +1,222 @@
+package pi
+
+import (
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"github.com/rumpl/harness"
+)
+
+func TestName(t *testing.T) {
+	p := New("claude-sonnet-4-6")
+	if p.Name() != "pi" {
+		t.Errorf("Name() = %q, want %q", p.Name(), "pi")
+	}
+}
+
+func TestPrintCommand(t *testing.T) {
+	t.Run("includes model and flags", func(t *testing.T) {
+		p := New("claude-sonnet-4-6")
+		cmd := p.PrintCommand("do something")
+		for _, want := range []string{"claude-sonnet-4-6", "--mode json", "--no-session", "-p"} {
+			if !strings.Contains(cmd, want) {
+				t.Errorf("PrintCommand missing %q in %q", want, cmd)
+			}
+		}
+	})
+
+	t.Run("shell-escapes prompt", func(t *testing.T) {
+		p := New("claude-sonnet-4-6")
+		cmd := p.PrintCommand("it's a test")
+		if !strings.Contains(cmd, "'it'\\''s a test'") {
+			t.Errorf("PrintCommand did not escape prompt: %q", cmd)
+		}
+	})
+
+	t.Run("shell-escapes model", func(t *testing.T) {
+		p := New("claude-sonnet-4-6")
+		cmd := p.PrintCommand("do something")
+		if !strings.Contains(cmd, "--model 'claude-sonnet-4-6'") {
+			t.Errorf("PrintCommand did not escape model: %q", cmd)
+		}
+	})
+}
+
+func TestInteractiveArgs(t *testing.T) {
+	p := New("claude-sonnet-4-6")
+	args := p.InteractiveArgs("")
+	if args[0] != "pi" {
+		t.Errorf("args[0] = %q, want pi", args[0])
+	}
+	if !contains(args, "claude-sonnet-4-6") || !contains(args, "--model") {
+		t.Errorf("args missing model: %v", args)
+	}
+}
+
+func TestParseStreamLine(t *testing.T) {
+	p := New("claude-sonnet-4-6")
+
+	t.Run("extracts text from message_update", func(t *testing.T) {
+		line := jsonStr(map[string]any{
+			"type": "message_update",
+			"content": []any{
+				map[string]any{"type": "text_delta", "text": "Hello world"},
+			},
+		})
+		events := p.ParseStreamLine(line)
+		assertEqual(t, events, []harness.Event{
+			{Type: harness.EventText, Text: "Hello world"},
+		})
+	})
+
+	t.Run("extracts tool call from tool_execution_start", func(t *testing.T) {
+		line := jsonStr(map[string]any{
+			"type":      "tool_execution_start",
+			"tool_name": "Bash",
+			"input":     map[string]any{"command": "npm test"},
+		})
+		events := p.ParseStreamLine(line)
+		assertEqual(t, events, []harness.Event{
+			{Type: harness.EventToolCall, ToolName: "Bash", ToolArgs: "npm test"},
+		})
+	})
+
+	t.Run("skips non-allowlisted tools", func(t *testing.T) {
+		line := jsonStr(map[string]any{
+			"type":      "tool_execution_start",
+			"tool_name": "UnknownTool",
+			"input":     map[string]any{"foo": "bar"},
+		})
+		events := p.ParseStreamLine(line)
+		if len(events) != 0 {
+			t.Errorf("expected empty events, got %+v", events)
+		}
+	})
+
+	t.Run("extracts result from agent_end", func(t *testing.T) {
+		line := jsonStr(map[string]any{
+			"type":                   "agent_end",
+			"last_assistant_message": "Final answer",
+		})
+		events := p.ParseStreamLine(line)
+		if len(events) != 1 || events[0].Type != harness.EventResult || events[0].Result != "Final answer" {
+			t.Errorf("unexpected events: %+v", events)
+		}
+		if events[0].Usage != nil {
+			t.Errorf("expected nil usage, got %+v", events[0].Usage)
+		}
+	})
+
+	t.Run("extracts usage from agent_end", func(t *testing.T) {
+		line := jsonStr(map[string]any{
+			"type":                   "agent_end",
+			"last_assistant_message": "Done",
+			"usage": map[string]any{
+				"input_tokens":                float64(100),
+				"output_tokens":               float64(50),
+				"cache_read_input_tokens":     float64(10),
+				"cache_creation_input_tokens": float64(5),
+			},
+			"total_cost_usd": float64(0.01),
+			"num_turns":      float64(3),
+			"duration_ms":    float64(5000),
+		})
+		events := p.ParseStreamLine(line)
+		if len(events) != 1 {
+			t.Fatalf("expected 1 event, got %d", len(events))
+		}
+		u := events[0].Usage
+		if u == nil {
+			t.Fatal("expected usage, got nil")
+		}
+		if u.InputTokens != 100 || u.OutputTokens != 50 {
+			t.Errorf("unexpected tokens: %+v", u)
+		}
+		if u.TotalCostUSD != 0.01 {
+			t.Errorf("TotalCostUSD = %f, want 0.01", u.TotalCostUSD)
+		}
+	})
+
+	t.Run("returns empty for non-JSON", func(t *testing.T) {
+		if events := p.ParseStreamLine("not json"); len(events) != 0 {
+			t.Errorf("expected empty, got %+v", events)
+		}
+		if events := p.ParseStreamLine(""); len(events) != 0 {
+			t.Errorf("expected empty, got %+v", events)
+		}
+	})
+
+	t.Run("returns empty for unrecognized event types", func(t *testing.T) {
+		line := jsonStr(map[string]any{"type": "unknown_event"})
+		if events := p.ParseStreamLine(line); len(events) != 0 {
+			t.Errorf("expected empty, got %+v", events)
+		}
+	})
+
+	t.Run("returns empty for malformed JSON", func(t *testing.T) {
+		if events := p.ParseStreamLine("{bad json"); len(events) != 0 {
+			t.Errorf("expected empty, got %+v", events)
+		}
+	})
+
+	t.Run("handles message_update with missing content", func(t *testing.T) {
+		line := jsonStr(map[string]any{"type": "message_update"})
+		if events := p.ParseStreamLine(line); len(events) != 0 {
+			t.Errorf("expected empty, got %+v", events)
+		}
+	})
+
+	t.Run("handles tool_execution_start with missing input", func(t *testing.T) {
+		line := jsonStr(map[string]any{
+			"type":      "tool_execution_start",
+			"tool_name": "Bash",
+		})
+		if events := p.ParseStreamLine(line); len(events) != 0 {
+			t.Errorf("expected empty, got %+v", events)
+		}
+	})
+
+	t.Run("independent model instances", func(t *testing.T) {
+		p1 := New("model-a")
+		p2 := New("model-b")
+		cmd1 := p1.PrintCommand("test")
+		cmd2 := p2.PrintCommand("test")
+		if !strings.Contains(cmd1, "model-a") || strings.Contains(cmd1, "model-b") {
+			t.Errorf("p1 command contains wrong model: %q", cmd1)
+		}
+		if !strings.Contains(cmd2, "model-b") || strings.Contains(cmd2, "model-a") {
+			t.Errorf("p2 command contains wrong model: %q", cmd2)
+		}
+	})
+}
+
+// --- helpers ---
+
+func jsonStr(v any) string {
+	b, _ := json.Marshal(v)
+	return string(b)
+}
+
+func contains(ss []string, s string) bool {
+	for _, v := range ss {
+		if v == s {
+			return true
+		}
+	}
+	return false
+}
+
+func assertEqual(t *testing.T, got, want []harness.Event) {
+	t.Helper()
+	if len(got) != len(want) {
+		t.Fatalf("len(events) = %d, want %d\ngot:  %+v\nwant: %+v", len(got), len(want), got, want)
+	}
+	for i := range got {
+		if got[i].Type != want[i].Type || got[i].Text != want[i].Text ||
+			got[i].Result != want[i].Result || got[i].ToolName != want[i].ToolName ||
+			got[i].ToolArgs != want[i].ToolArgs {
+			t.Errorf("event[%d] = %+v, want %+v", i, got[i], want[i])
+		}
+	}
+}
