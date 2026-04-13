@@ -1,13 +1,14 @@
 // Command harness-example demonstrates how to use the harness library to
 // run an AI coding agent and process its streaming output. It supports all
-// three providers (claude-code, pi, codex) and lets you switch between them
-// with a single flag.
+// four providers (claude-code, pi, codex, docker-agent) and lets you switch
+// between them with a single flag.
 //
 // Usage:
 //
 //	harness-example --provider claude-code --model claude-opus-4-6 "Explain what a goroutine is"
 //	harness-example --provider pi --model claude-sonnet-4-6 "Write hello world in Go"
 //	harness-example --provider codex --model gpt-5.4-mini "List files in /tmp"
+//	harness-example --provider docker-agent --model coder "Hello"
 //	harness-example --print-cmd --provider codex --model gpt-5.4-mini "test"
 package main
 
@@ -22,6 +23,7 @@ import (
 	"github.com/rumpl/harness"
 	"github.com/rumpl/harness/claudecode"
 	"github.com/rumpl/harness/codex"
+	"github.com/rumpl/harness/dockeragent"
 	"github.com/rumpl/harness/pi"
 )
 
@@ -95,8 +97,10 @@ func newProvider(name, model, effort string) harness.Provider {
 		return pi.New(model)
 	case "codex":
 		return codex.New(model)
+	case "docker-agent":
+		return dockeragent.New(model)
 	default:
-		fmt.Fprintf(os.Stderr, "unknown provider: %s (choices: claude-code, pi, codex)\n", name)
+		fmt.Fprintf(os.Stderr, "unknown provider: %s (choices: claude-code, pi, codex, docker-agent)\n", name)
 		os.Exit(1)
 		return nil
 	}
