@@ -1,6 +1,10 @@
 package claudecode
 
-import "github.com/rumpl/harness"
+import (
+	"encoding/json"
+
+	"github.com/rumpl/harness"
+)
 
 // parseStreamLine handles the Claude Code stream-json format.
 // It recognises two event shapes:
@@ -19,6 +23,61 @@ func parseStreamLine(line string) []harness.Event {
 		return parseAssistant(obj)
 	case "result":
 		return parseResult(obj)
+	case "stream_event":
+		return parseStreamEvent(obj)
+	}
+	return nil
+}
+
+func parseStreamEvent(obj map[string]any) []harness.Event {
+	raw, ok := obj["event"]
+	if !ok {
+		return nil
+	}
+	b, err := json.Marshal(raw)
+	if err != nil {
+		return nil
+	}
+	var inner struct {
+		Type         string `json:"type"`
+		Index        int    `json:"index"`
+		ContentBlock *struct {
+			Type string `json:"type"`
+			ID   string `json:"id"`
+			Name string `json:"name"`
+		} `json:"content_block"`
+		Delta *struct {
+			Type        string `json:"type"`
+			Text        string `json:"text"`
+			PartialJSON string `json:"partial_json"`
+			Thinking    string `json:"thinking"`
+		} `json:"delta"`
+	}
+	if err := json.Unmarshal(b, &inner); err != nil {
+		return nil
+	}
+	switch inner.Type {
+	case "content_block_start":
+		if inner.ContentBlock != nil && inner.ContentBlock.Type == "tool_use" {
+			return []harness.Event{{
+				Type:     harness.EventToolCall,
+				ToolName: inner.ContentBlock.Name,
+			}}
+		}
+	case "content_block_delta":
+		if inner.Delta == nil {
+			return nil
+		}
+		switch inner.Delta.Type {
+		case "text_delta":
+			if inner.Delta.Text != "" {
+				return []harness.Event{{Type: harness.EventText, Text: inner.Delta.Text}}
+			}
+		case "thinking_delta":
+			if inner.Delta.Thinking != "" {
+				return []harness.Event{{Type: harness.EventReasoning, Reasoning: inner.Delta.Thinking}}
+			}
+		}
 	}
 	return nil
 }
