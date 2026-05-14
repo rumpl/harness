@@ -48,7 +48,7 @@ func (p *provider) PrintCommand(prompt string) string {
 		effortFlag = fmt.Sprintf(" --effort %s", p.effort)
 	}
 	return fmt.Sprintf(
-		"claude --print --verbose --dangerously-skip-permissions --output-format stream-json --model %s%s -p %s",
+		"claude --print --verbose --dangerously-skip-permissions --include-partial-messages --output-format stream-json --model %s%s -p %s",
 		harness.ShellEscape(p.model),
 		effortFlag,
 		harness.ShellEscape(prompt),
