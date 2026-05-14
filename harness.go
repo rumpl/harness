@@ -43,21 +43,26 @@ const (
 	EventResult EventType = "result"
 	// EventToolCall is emitted when the agent invokes a tool.
 	EventToolCall EventType = "tool_call"
+	// EventReasoning is emitted when the agent produces reasoning/thinking content.
+	// Not all providers support this; check provider documentation.
+	EventReasoning EventType = "reasoning"
 )
 
 // Event is a single parsed event from an agent's streaming output. Depending
 // on the Type field, different fields are populated:
 //
-//   - EventText:     Text is set.
-//   - EventResult:   Result and (optionally) Usage are set.
-//   - EventToolCall: ToolName and ToolArgs are set.
+//   - EventText:      Text is set.
+//   - EventResult:    Result and (optionally) Usage are set.
+//   - EventToolCall:  ToolName and ToolArgs are set.
+//   - EventReasoning: Reasoning is set.
 type Event struct {
-	Type     EventType  `json:"type"`
-	Text     string     `json:"text,omitempty"`
-	Result   string     `json:"result,omitempty"`
-	Usage    *Usage     `json:"usage,omitempty"`
-	ToolName string     `json:"name,omitempty"`
-	ToolArgs string     `json:"args,omitempty"`
+	Type      EventType `json:"type"`
+	Text      string    `json:"text,omitempty"`
+	Result    string    `json:"result,omitempty"`
+	Usage     *Usage    `json:"usage,omitempty"`
+	ToolName  string    `json:"name,omitempty"`
+	ToolArgs  string    `json:"args,omitempty"`
+	Reasoning string    `json:"reasoning,omitempty"` // set when Type == EventReasoning
 }
 
 // Usage captures token and cost statistics reported by the agent at the end
