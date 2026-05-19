@@ -2,6 +2,7 @@ package claudecode
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -95,7 +96,7 @@ func TestInteractiveArgs(t *testing.T) {
 		if args[0] != "claude" {
 			t.Errorf("args[0] = %q, want claude", args[0])
 		}
-		if !contains(args, "claude-sonnet-4-6") || !contains(args, "--model") {
+		if !slices.Contains(args, "claude-sonnet-4-6") || !slices.Contains(args, "--model") {
 			t.Errorf("args missing model: %v", args)
 		}
 	})
@@ -103,10 +104,10 @@ func TestInteractiveArgs(t *testing.T) {
 	t.Run("strips anthropic provider prefix from model", func(t *testing.T) {
 		p := New("anthropic/claude-opus-4-6")
 		args := p.InteractiveArgs("")
-		if !contains(args, "claude-opus-4-6") {
+		if !slices.Contains(args, "claude-opus-4-6") {
 			t.Errorf("args missing normalized model: %v", args)
 		}
-		if contains(args, "anthropic/claude-opus-4-6") {
+		if slices.Contains(args, "anthropic/claude-opus-4-6") {
 			t.Errorf("args should not pass provider/model form to claude: %v", args)
 		}
 	})
@@ -114,7 +115,7 @@ func TestInteractiveArgs(t *testing.T) {
 	t.Run("includes effort when set", func(t *testing.T) {
 		p := New("claude-opus-4-6", WithEffort(EffortLow))
 		args := p.InteractiveArgs("")
-		if !contains(args, "--effort") || !contains(args, "low") {
+		if !slices.Contains(args, "--effort") || !slices.Contains(args, "low") {
 			t.Errorf("args missing effort: %v", args)
 		}
 	})
@@ -122,7 +123,7 @@ func TestInteractiveArgs(t *testing.T) {
 	t.Run("omits model when empty", func(t *testing.T) {
 		p := New("")
 		args := p.InteractiveArgs("")
-		if contains(args, "--model") {
+		if slices.Contains(args, "--model") {
 			t.Errorf("args should not contain model: %v", args)
 		}
 	})
@@ -130,7 +131,7 @@ func TestInteractiveArgs(t *testing.T) {
 	t.Run("omits effort when not set", func(t *testing.T) {
 		p := New("claude-opus-4-6")
 		args := p.InteractiveArgs("")
-		if contains(args, "--effort") {
+		if slices.Contains(args, "--effort") {
 			t.Errorf("args should not contain --effort: %v", args)
 		}
 	})
@@ -365,15 +366,6 @@ func TestParseStreamLine(t *testing.T) {
 func jsonStr(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
-}
-
-func contains(ss []string, s string) bool {
-	for _, v := range ss {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
 
 func assertEqual(t *testing.T, got, want []harness.Event) {

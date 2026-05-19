@@ -7,14 +7,6 @@ import (
 	"github.com/rumpl/harness"
 )
 
-// parseStreamLine handles a single Claude Code stream-json line without
-// retaining cross-line state. Provider.ParseStreamLine uses a stateful parser
-// so it can de-duplicate Claude's partial stream events from the full message
-// snapshots that follow them.
-func parseStreamLine(line string) []harness.Event {
-	return newParser().parseLine(line)
-}
-
 type parser struct {
 	blocks                     map[int]*streamBlock
 	streamedTextSinceAssistant bool
@@ -340,9 +332,5 @@ func join(ss []string) string {
 	if len(ss) == 1 {
 		return ss[0]
 	}
-	out := ""
-	for _, s := range ss {
-		out += s
-	}
-	return out
+	return strings.Join(ss, "")
 }

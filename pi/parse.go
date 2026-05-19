@@ -2,6 +2,7 @@ package pi
 
 import (
 	"encoding/json"
+	"strings"
 
 	"github.com/rumpl/harness"
 )
@@ -150,7 +151,7 @@ func extractTextContent(msg map[string]any) string {
 	if !ok {
 		return ""
 	}
-	var out string
+	var out strings.Builder
 	for _, raw := range content {
 		block, ok := raw.(map[string]any)
 		if !ok {
@@ -158,9 +159,9 @@ func extractTextContent(msg map[string]any) string {
 		}
 		if bt, _ := block["type"].(string); bt == "text" {
 			if t, ok := block["text"].(string); ok {
-				out += t
+				out.WriteString(t)
 			}
 		}
 	}
-	return out
+	return out.String()
 }

@@ -58,11 +58,11 @@ func normalizeModel(model string) string {
 func (p *provider) PrintCommand(prompt string) string {
 	modelFlag := ""
 	if p.model != "" {
-		modelFlag = fmt.Sprintf(" --model %s", harness.ShellEscape(p.model))
+		modelFlag = " --model " + harness.ShellEscape(p.model)
 	}
 	effortFlag := ""
 	if p.effort != "" {
-		effortFlag = fmt.Sprintf(" --effort %s", p.effort)
+		effortFlag = " --effort " + string(p.effort)
 	}
 	return fmt.Sprintf(
 		"claude --print --verbose --dangerously-skip-permissions --include-partial-messages --output-format stream-json%s%s -p %s",

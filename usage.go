@@ -26,11 +26,11 @@ func ExtractUsage(obj map[string]any) *Usage {
 	u := &Usage{
 		InputTokens:              inputTokens,
 		OutputTokens:             outputTokens,
-		CacheReadInputTokens:     jsonNumberOr(usageMap, "cache_read_input_tokens", 0),
-		CacheCreationInputTokens: jsonNumberOr(usageMap, "cache_creation_input_tokens", 0),
+		CacheReadInputTokens:     jsonNumberOr(usageMap, "cache_read_input_tokens"),
+		CacheCreationInputTokens: jsonNumberOr(usageMap, "cache_creation_input_tokens"),
 		TotalCostUSD:             jsonFloatOr(obj, "total_cost_usd", 0),
-		NumTurns:                 jsonNumberOr(obj, "num_turns", 0),
-		DurationMS:               jsonNumberOr(obj, "duration_ms", 0),
+		NumTurns:                 jsonNumberOr(obj, "num_turns"),
+		DurationMS:               jsonNumberOr(obj, "duration_ms"),
 	}
 	return u
 }
@@ -38,7 +38,7 @@ func ExtractUsage(obj map[string]any) *Usage {
 // ParseJSON is a convenience that unmarshals a line into a map. It returns
 // nil, false if the line is not valid JSON or does not start with '{'.
 func ParseJSON(line string) (map[string]any, bool) {
-	if len(line) == 0 || line[0] != '{' {
+	if line == "" || line[0] != '{' {
 		return nil, false
 	}
 	var obj map[string]any
@@ -66,10 +66,10 @@ func jsonNumber(m map[string]any, key string) (int, bool) {
 	return 0, false
 }
 
-func jsonNumberOr(m map[string]any, key string, fallback int) int {
+func jsonNumberOr(m map[string]any, key string) int {
 	v, ok := jsonNumber(m, key)
 	if !ok {
-		return fallback
+		return 0
 	}
 	return v
 }
@@ -116,7 +116,7 @@ func ExtractPiUsage(msg map[string]any) *Usage {
 	u := &Usage{
 		InputTokens:          inputTokens,
 		OutputTokens:         outputTokens,
-		CacheReadInputTokens: jsonNumberOr(usageMap, "cacheRead", 0),
+		CacheReadInputTokens: jsonNumberOr(usageMap, "cacheRead"),
 	}
 
 	// Cost info is nested: usage.cost.total
@@ -151,6 +151,6 @@ func ExtractCodexUsage(obj map[string]any) *Usage {
 	return &Usage{
 		InputTokens:          inputTokens,
 		OutputTokens:         outputTokens,
-		CacheReadInputTokens: jsonNumberOr(usageMap, "cached_input_tokens", 0),
+		CacheReadInputTokens: jsonNumberOr(usageMap, "cached_input_tokens"),
 	}
 }

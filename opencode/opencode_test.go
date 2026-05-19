@@ -2,6 +2,7 @@ package opencode
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -87,7 +88,7 @@ func TestInteractiveArgs(t *testing.T) {
 		if args[0] != "opencode" {
 			t.Errorf("args[0] = %q, want opencode", args[0])
 		}
-		if !contains(args, "anthropic/claude-3-5-sonnet") || !contains(args, "--model") {
+		if !slices.Contains(args, "anthropic/claude-3-5-sonnet") || !slices.Contains(args, "--model") {
 			t.Errorf("args missing model: %v", args)
 		}
 	})
@@ -95,7 +96,7 @@ func TestInteractiveArgs(t *testing.T) {
 	t.Run("includes agent when set", func(t *testing.T) {
 		p := New("anthropic/claude-3-5-sonnet", WithAgent("plan"))
 		args := p.InteractiveArgs("")
-		if !contains(args, "--agent") || !contains(args, "plan") {
+		if !slices.Contains(args, "--agent") || !slices.Contains(args, "plan") {
 			t.Errorf("args missing agent: %v", args)
 		}
 	})
@@ -103,7 +104,7 @@ func TestInteractiveArgs(t *testing.T) {
 	t.Run("omits model when empty", func(t *testing.T) {
 		p := New("")
 		args := p.InteractiveArgs("")
-		if contains(args, "--model") {
+		if slices.Contains(args, "--model") {
 			t.Errorf("args should not contain model: %v", args)
 		}
 	})
@@ -111,7 +112,7 @@ func TestInteractiveArgs(t *testing.T) {
 	t.Run("omits agent when not set", func(t *testing.T) {
 		p := New("anthropic/claude-3-5-sonnet")
 		args := p.InteractiveArgs("")
-		if contains(args, "--agent") {
+		if slices.Contains(args, "--agent") {
 			t.Errorf("args should not contain --agent: %v", args)
 		}
 	})
@@ -668,15 +669,6 @@ func TestParseStreamLine(t *testing.T) {
 func jsonStr(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
-}
-
-func contains(ss []string, s string) bool {
-	for _, v := range ss {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
 
 func assertEqual(t *testing.T, got, want []harness.Event) {

@@ -2,6 +2,7 @@ package dockeragent
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 	"testing"
 
@@ -53,7 +54,7 @@ func TestInteractiveArgs(t *testing.T) {
 	if args[0] != "docker-agent" {
 		t.Errorf("args[0] = %q, want docker-agent", args[0])
 	}
-	if !contains(args, "coder") || !contains(args, "--yolo") {
+	if !slices.Contains(args, "coder") || !slices.Contains(args, "--yolo") {
 		t.Errorf("args missing image or --yolo: %v", args)
 	}
 }
@@ -260,15 +261,6 @@ func TestParseStreamLine(t *testing.T) {
 func jsonStr(v any) string {
 	b, _ := json.Marshal(v)
 	return string(b)
-}
-
-func contains(ss []string, s string) bool {
-	for _, v := range ss {
-		if v == s {
-			return true
-		}
-	}
-	return false
 }
 
 func assertEqual(t *testing.T, got, want []harness.Event) {

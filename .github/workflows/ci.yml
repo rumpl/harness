@@ -22,6 +22,12 @@ jobs:
           go-version-file: go.mod
           cache: true
 
+      - name: Lint
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.12.2
+          args: ./...
+
       - name: Check formatting
         run: |
           unformatted="$(gofmt -l .)"
