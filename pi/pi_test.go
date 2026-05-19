@@ -41,17 +41,35 @@ func TestPrintCommand(t *testing.T) {
 			t.Errorf("PrintCommand did not escape model: %q", cmd)
 		}
 	})
+
+	t.Run("omits model flag when empty", func(t *testing.T) {
+		p := New("")
+		cmd := p.PrintCommand("do something")
+		if strings.Contains(cmd, "--model") {
+			t.Errorf("PrintCommand should not contain --model: %q", cmd)
+		}
+	})
 }
 
 func TestInteractiveArgs(t *testing.T) {
-	p := New("claude-sonnet-4-6")
-	args := p.InteractiveArgs("")
-	if args[0] != "pi" {
-		t.Errorf("args[0] = %q, want pi", args[0])
-	}
-	if !contains(args, "claude-sonnet-4-6") || !contains(args, "--model") {
-		t.Errorf("args missing model: %v", args)
-	}
+	t.Run("includes model", func(t *testing.T) {
+		p := New("claude-sonnet-4-6")
+		args := p.InteractiveArgs("")
+		if args[0] != "pi" {
+			t.Errorf("args[0] = %q, want pi", args[0])
+		}
+		if !contains(args, "claude-sonnet-4-6") || !contains(args, "--model") {
+			t.Errorf("args missing model: %v", args)
+		}
+	})
+
+	t.Run("omits model when empty", func(t *testing.T) {
+		p := New("")
+		args := p.InteractiveArgs("")
+		if contains(args, "--model") {
+			t.Errorf("args should not contain model: %v", args)
+		}
+	})
 }
 
 func TestParseStreamLine(t *testing.T) {

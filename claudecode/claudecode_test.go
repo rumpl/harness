@@ -42,6 +42,14 @@ func TestPrintCommand(t *testing.T) {
 		}
 	})
 
+	t.Run("omits model flag when empty", func(t *testing.T) {
+		p := New("")
+		cmd := p.PrintCommand("do something")
+		if strings.Contains(cmd, "--model") {
+			t.Errorf("PrintCommand should not contain --model: %q", cmd)
+		}
+	})
+
 	t.Run("includes effort when set", func(t *testing.T) {
 		p := New("claude-opus-4-6", WithEffort(EffortHigh))
 		cmd := p.PrintCommand("do something")
@@ -86,6 +94,14 @@ func TestInteractiveArgs(t *testing.T) {
 		args := p.InteractiveArgs("")
 		if !contains(args, "--effort") || !contains(args, "low") {
 			t.Errorf("args missing effort: %v", args)
+		}
+	})
+
+	t.Run("omits model when empty", func(t *testing.T) {
+		p := New("")
+		args := p.InteractiveArgs("")
+		if contains(args, "--model") {
+			t.Errorf("args should not contain model: %v", args)
 		}
 	})
 
