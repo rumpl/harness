@@ -41,8 +41,14 @@ const (
 	EventText EventType = "text"
 	// EventResult is emitted when the agent produces its final answer.
 	EventResult EventType = "result"
+	// EventToolCallStart is emitted when the agent starts building a tool call.
+	EventToolCallStart EventType = "tool_call_start"
+	// EventToolCallDelta is emitted when the agent streams tool call arguments.
+	EventToolCallDelta EventType = "tool_call_delta"
 	// EventToolCall is emitted when the agent invokes a tool.
 	EventToolCall EventType = "tool_call"
+	// EventToolResult is emitted when a tool invocation completes.
+	EventToolResult EventType = "tool_result"
 	// EventReasoning is emitted when the agent produces reasoning/thinking content.
 	// Not all providers support this; check provider documentation.
 	EventReasoning EventType = "reasoning"
@@ -51,18 +57,27 @@ const (
 // Event is a single parsed event from an agent's streaming output. Depending
 // on the Type field, different fields are populated:
 //
-//   - EventText:      Text is set.
-//   - EventResult:    Result and (optionally) Usage are set.
-//   - EventToolCall:  ToolName and ToolArgs are set.
+//   - EventText:          Text is set.
+//   - EventResult:        Result and (optionally) Usage are set.
+//   - EventToolCallStart: ToolID (optional) and ToolName are set.
+//   - EventToolCallDelta: ToolID (optional), ToolName (optional), and ToolArgs
+//     are set to the raw argument delta.
+//   - EventToolCall:      ToolID (optional), ToolName, and ToolArgs are set to
+//     the provider's JSON argument object when available.
+//   - EventToolResult:    ToolID (optional), ToolName (optional), ToolOutput,
+//     and ToolError are set.
 //   - EventReasoning: Reasoning is set.
 type Event struct {
-	Type      EventType `json:"type"`
-	Text      string    `json:"text,omitempty"`
-	Result    string    `json:"result,omitempty"`
-	Usage     *Usage    `json:"usage,omitempty"`
-	ToolName  string    `json:"name,omitempty"`
-	ToolArgs  string    `json:"args,omitempty"`
-	Reasoning string    `json:"reasoning,omitempty"` // set when Type == EventReasoning
+	Type       EventType `json:"type"`
+	Text       string    `json:"text,omitempty"`
+	Result     string    `json:"result,omitempty"`
+	Usage      *Usage    `json:"usage,omitempty"`
+	ToolID     string    `json:"tool_id,omitempty"`
+	ToolName   string    `json:"name,omitempty"`
+	ToolArgs   string    `json:"args,omitempty"`
+	ToolOutput string    `json:"output,omitempty"`
+	ToolError  bool      `json:"tool_error,omitempty"`
+	Reasoning  string    `json:"reasoning,omitempty"` // set when Type == EventReasoning
 }
 
 // Usage captures token and cost statistics reported by the agent at the end

@@ -91,11 +91,27 @@ func TestParseStreamLine(t *testing.T) {
 	t.Run("extracts tool call from item.started command_execution", func(t *testing.T) {
 		line := jsonStr(map[string]any{
 			"type": "item.started",
-			"item": map[string]any{"type": "command_execution", "command": "npm test"},
+			"item": map[string]any{"type": "command_execution", "id": "cmd-1", "command": "npm test"},
 		})
 		events := p.ParseStreamLine(line)
 		assertEqual(t, events, []harness.Event{
-			{Type: harness.EventToolCall, ToolName: "Bash", ToolArgs: "npm test"},
+			{Type: harness.EventToolCall, ToolID: "cmd-1", ToolName: "Bash", ToolArgs: "npm test"},
+		})
+	})
+
+	t.Run("extracts tool result from item.completed command_execution", func(t *testing.T) {
+		line := jsonStr(map[string]any{
+			"type": "item.completed",
+			"item": map[string]any{
+				"type":              "command_execution",
+				"id":                "cmd-1",
+				"aggregated_output": "ok\n",
+				"exit_code":         float64(0),
+			},
+		})
+		events := p.ParseStreamLine(line)
+		assertEqual(t, events, []harness.Event{
+			{Type: harness.EventToolResult, ToolID: "cmd-1", ToolName: "Bash", ToolOutput: "ok\n"},
 		})
 	})
 
@@ -233,8 +249,9 @@ func assertEqual(t *testing.T, got, want []harness.Event) {
 	}
 	for i := range got {
 		if got[i].Type != want[i].Type || got[i].Text != want[i].Text ||
-			got[i].Result != want[i].Result || got[i].ToolName != want[i].ToolName ||
-			got[i].ToolArgs != want[i].ToolArgs {
+			got[i].Result != want[i].Result || got[i].ToolID != want[i].ToolID ||
+			got[i].ToolName != want[i].ToolName || got[i].ToolArgs != want[i].ToolArgs ||
+			got[i].ToolOutput != want[i].ToolOutput || got[i].ToolError != want[i].ToolError {
 			t.Errorf("event[%d] = %+v, want %+v", i, got[i], want[i])
 		}
 	}

@@ -30,8 +30,14 @@ func main() {
 		switch ev.Type {
 		case harness.EventText:
 			fmt.Print(ev.Text)
+		case harness.EventToolCallStart:
+			fmt.Printf("[tool: %s]\n", ev.ToolName)
+		case harness.EventToolCallDelta:
+			fmt.Print(ev.ToolArgs)
 		case harness.EventToolCall:
 			fmt.Printf("[tool: %s] %s\n", ev.ToolName, ev.ToolArgs)
+		case harness.EventToolResult:
+			fmt.Printf("[tool result: %s] %s\n", ev.ToolName, ev.ToolOutput)
 		case harness.EventResult:
 			fmt.Printf("\nResult: %s\n", ev.Result)
 		}
@@ -86,7 +92,10 @@ type Provider interface {
 | -------------- | ----------------------- |
 | `EventText`    | `Text`                  |
 | `EventResult`  | `Result`, `Usage` (opt) |
-| `EventToolCall`| `ToolName`, `ToolArgs`  |
+| `EventToolCallStart` | `ToolID` (opt), `ToolName` |
+| `EventToolCallDelta` | `ToolID` (opt), `ToolName` (opt), `ToolArgs` raw delta |
+| `EventToolCall`| `ToolID` (opt), `ToolName`, `ToolArgs` |
+| `EventToolResult` | `ToolID` (opt), `ToolName` (opt), `ToolOutput`, `ToolError` |
 
 ## Example CLI
 

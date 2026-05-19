@@ -6,26 +6,6 @@ import (
 	"github.com/rumpl/harness"
 )
 
-// opencodeToolArgs maps opencode tool names to the input field that contains
-// the human-readable argument for display. opencode uses lowercase tool names
-// distinct from Claude Code's, so this is kept separate from the global
-// [harness.ToolArgFields] allowlist.
-var opencodeToolArgs = map[string]string{
-	"bash":        "command",
-	"webfetch":    "url",
-	"websearch":   "query",
-	"read":        "filePath",
-	"read_file":   "filePath",
-	"edit":        "filePath",
-	"edit_file":   "filePath",
-	"write":       "filePath",
-	"grep":        "pattern",
-	"glob":        "pattern",
-	"apply_patch": "patch",
-	"task":        "description",
-	"skill":       "name",
-}
-
 // parser carries state across lines so we can emit a final EventResult
 // (carrying the accumulated assistant text and token usage) when opencode
 // reports that the final step finished.
@@ -172,9 +152,9 @@ func (p *parser) parsePartDelta(obj map[string]any) []harness.Event {
 	return []harness.Event{{Type: harness.EventText, Text: delta}}
 }
 
-// parseToolPart emits an EventToolCall when the tool reaches a terminal
-// state (completed or error). The argument is pulled from state.input using
-// the opencode tool-name allowlist.
+// parseToolPart emits a tool call and its result when the tool reaches a
+// terminal state (completed or error). The argument is pulled from state.input
+// using the opencode tool-name allowlist.
 func parseToolPart(part map[string]any) []harness.Event {
 	name, _ := part["tool"].(string)
 	if name == "" {
@@ -192,23 +172,59 @@ func parseToolPart(part map[string]any) []harness.Event {
 		return nil
 	}
 
-	argField, ok := opencodeToolArgs[name]
-	if !ok {
-		return nil
+	input, _ := state["input"].(map[string]any)
+	id, _ := part["id"].(string)
+	return []harness.Event{
+		{
+			Type:     harness.EventToolCall,
+			ToolID:   id,
+			ToolName: name,
+			ToolArgs: jsonObjectString(input),
+		},
+		{
+			Type:       harness.EventToolResult,
+			ToolID:     id,
+			ToolName:   name,
+			ToolOutput: opencodeToolOutput(state),
+			ToolError:  status == "error",
+		},
 	}
-	input, ok := state["input"].(map[string]any)
-	if !ok {
-		return nil
+}
+
+func jsonObjectString(input map[string]any) string {
+	if input == nil {
+		return ""
 	}
-	argValue, ok := input[argField].(string)
-	if !ok {
-		return nil
+	b, err := json.Marshal(input)
+	if err != nil {
+		return ""
 	}
-	return []harness.Event{{
-		Type:     harness.EventToolCall,
-		ToolName: name,
-		ToolArgs: argValue,
-	}}
+	return string(b)
+}
+
+func opencodeToolOutput(state map[string]any) string {
+	if output, ok := firstStringField(state, "output", "stdout", "stderr", "error"); ok {
+		return output
+	}
+	if metadata, ok := state["metadata"].(map[string]any); ok {
+		if output, ok := firstStringField(metadata, "output", "stdout", "stderr", "error"); ok {
+			return output
+		}
+	}
+	return ""
+}
+
+func firstStringField(m map[string]any, keys ...string) (string, bool) {
+	for _, key := range keys {
+		value, ok := m[key]
+		if !ok {
+			continue
+		}
+		if s, ok := value.(string); ok {
+			return s, true
+		}
+	}
+	return "", false
 }
 
 func (p *parser) parseStepStart(obj map[string]any) []harness.Event {

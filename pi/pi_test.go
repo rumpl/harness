@@ -115,26 +115,40 @@ func TestParseStreamLine(t *testing.T) {
 
 	t.Run("extracts tool call from tool_execution_start", func(t *testing.T) {
 		line := jsonStr(map[string]any{
-			"type":      "tool_execution_start",
-			"tool_name": "Bash",
-			"input":     map[string]any{"command": "npm test"},
+			"type":              "tool_execution_start",
+			"tool_execution_id": "tool-1",
+			"tool_name":         "Bash",
+			"input":             map[string]any{"command": "npm test"},
 		})
 		events := p.ParseStreamLine(line)
 		assertEqual(t, events, []harness.Event{
-			{Type: harness.EventToolCall, ToolName: "Bash", ToolArgs: "npm test"},
+			{Type: harness.EventToolCall, ToolID: "tool-1", ToolName: "Bash", ToolArgs: `{"command":"npm test"}`},
 		})
 	})
 
-	t.Run("skips non-allowlisted tools", func(t *testing.T) {
+	t.Run("extracts tool result from tool_execution_result", func(t *testing.T) {
+		line := jsonStr(map[string]any{
+			"type":              "tool_execution_result",
+			"tool_execution_id": "tool-1",
+			"tool_name":         "Bash",
+			"output":            "ok\n",
+		})
+		events := p.ParseStreamLine(line)
+		assertEqual(t, events, []harness.Event{
+			{Type: harness.EventToolResult, ToolID: "tool-1", ToolName: "Bash", ToolOutput: "ok\n"},
+		})
+	})
+
+	t.Run("extracts unknown tools", func(t *testing.T) {
 		line := jsonStr(map[string]any{
 			"type":      "tool_execution_start",
 			"tool_name": "UnknownTool",
 			"input":     map[string]any{"foo": "bar"},
 		})
 		events := p.ParseStreamLine(line)
-		if len(events) != 0 {
-			t.Errorf("expected empty events, got %+v", events)
-		}
+		assertEqual(t, events, []harness.Event{
+			{Type: harness.EventToolCall, ToolName: "UnknownTool", ToolArgs: `{"foo":"bar"}`},
+		})
 	})
 
 	t.Run("extracts result from agent_end", func(t *testing.T) {
@@ -258,9 +272,7 @@ func TestParseStreamLine(t *testing.T) {
 			"type":      "tool_execution_start",
 			"tool_name": "Bash",
 		})
-		if events := p.ParseStreamLine(line); len(events) != 0 {
-			t.Errorf("expected empty, got %+v", events)
-		}
+		assertEqual(t, p.ParseStreamLine(line), []harness.Event{{Type: harness.EventToolCall, ToolName: "Bash"}})
 	})
 
 	t.Run("independent model instances", func(t *testing.T) {
@@ -300,8 +312,9 @@ func assertEqual(t *testing.T, got, want []harness.Event) {
 	}
 	for i := range got {
 		if got[i].Type != want[i].Type || got[i].Text != want[i].Text ||
-			got[i].Result != want[i].Result || got[i].ToolName != want[i].ToolName ||
-			got[i].ToolArgs != want[i].ToolArgs {
+			got[i].Result != want[i].Result || got[i].ToolID != want[i].ToolID ||
+			got[i].ToolName != want[i].ToolName || got[i].ToolArgs != want[i].ToolArgs ||
+			got[i].ToolOutput != want[i].ToolOutput || got[i].ToolError != want[i].ToolError {
 			t.Errorf("event[%d] = %+v, want %+v", i, got[i], want[i])
 		}
 	}
