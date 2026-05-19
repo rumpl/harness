@@ -1,6 +1,9 @@
 package harness
 
-import "testing"
+import (
+	"context"
+	"testing"
+)
 
 func TestShellEscape(t *testing.T) {
 	tests := []struct {
@@ -51,8 +54,8 @@ func TestExtractUsage(t *testing.T) {
 			"usage": map[string]any{
 				"input_tokens":                float64(100),
 				"output_tokens":               float64(50),
-				"cache_read_input_tokens":      float64(10),
-				"cache_creation_input_tokens":  float64(5),
+				"cache_read_input_tokens":     float64(10),
+				"cache_creation_input_tokens": float64(5),
 			},
 			"total_cost_usd": float64(0.01),
 			"num_turns":      float64(3),
@@ -103,6 +106,47 @@ func TestExtractUsage(t *testing.T) {
 			t.Errorf("TotalCostUSD = %f, want 0", got.TotalCostUSD)
 		}
 	})
+}
+
+type customRunProvider struct {
+	called bool
+	prompt string
+}
+
+func (p *customRunProvider) Name() string { return "custom" }
+
+func (p *customRunProvider) PrintCommand(string) string {
+	return "false"
+}
+
+func (p *customRunProvider) InteractiveArgs(string) []string { return nil }
+
+func (p *customRunProvider) ParseStreamLine(string) []Event { return nil }
+
+func (p *customRunProvider) Run(_ context.Context, prompt string, fn func(Event)) error {
+	p.called = true
+	p.prompt = prompt
+	fn(Event{Type: EventText, Text: "streamed"})
+	return nil
+}
+
+func TestRunUsesCustomStreamingProvider(t *testing.T) {
+	p := &customRunProvider{}
+	var got []Event
+	if err := Run(context.Background(), p, "hello", func(ev Event) {
+		got = append(got, ev)
+	}); err != nil {
+		t.Fatalf("Run returned error: %v", err)
+	}
+	if !p.called {
+		t.Fatal("custom Run was not called")
+	}
+	if p.prompt != "hello" {
+		t.Fatalf("prompt = %q, want hello", p.prompt)
+	}
+	if len(got) != 1 || got[0].Type != EventText || got[0].Text != "streamed" {
+		t.Fatalf("events = %+v, want streamed text", got)
+	}
 }
 
 func TestParseJSON(t *testing.T) {

@@ -1,6 +1,6 @@
 # harness
 
-A Go library for calling different AI coding agent CLIs (Docker Agent, Claude Code, Pi, Codex) through a unified interface. Switch between agents by changing a single line of code.
+A Go library for calling different AI coding agent CLIs (Docker Agent, Claude Code, Pi, Codex, opencode) through a unified interface. Switch between agents by changing a single line of code.
 
 ## Install
 
@@ -53,6 +53,9 @@ p := pi.New("claude-sonnet-4-6")
 
 // Codex
 p := codex.New("gpt-5.4-mini")
+
+// opencode
+p := opencode.New("anthropic/claude-sonnet-4-6")
 ```
 
 The rest of your code stays exactly the same — all providers implement `harness.Provider`.
@@ -90,6 +93,7 @@ go run ./cmd/harness-example --provider docker-agent --model coder "Hello world"
 go run ./cmd/harness-example --provider claude-code --model claude-sonnet-4-6 "Hello world"
 go run ./cmd/harness-example --provider pi --model claude-sonnet-4-6 "Hello world"
 go run ./cmd/harness-example --provider codex --model gpt-5.4-mini "Hello world"
+go run ./cmd/harness-example --provider opencode --model anthropic/claude-sonnet-4-6 "Hello world"
 
 # Just print the command without executing:
 go run ./cmd/harness-example --print-cmd --provider docker-agent --model coder "test"
