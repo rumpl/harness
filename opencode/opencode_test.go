@@ -188,7 +188,8 @@ func TestParseStreamLine(t *testing.T) {
 		})
 		events := p.ParseStreamLine(line)
 		assertEqual(t, events, []harness.Event{
-			{Type: harness.EventToolCall, ToolName: "bash", ToolArgs: "npm test"},
+			{Type: harness.EventToolCall, ToolName: "bash", ToolArgs: `{"command":"npm test"}`},
+			{Type: harness.EventToolResult, ToolName: "bash"},
 		})
 	})
 
@@ -336,7 +337,8 @@ func TestParseStreamLine(t *testing.T) {
 		})
 		events := p.ParseStreamLine(line)
 		assertEqual(t, events, []harness.Event{
-			{Type: harness.EventToolCall, ToolName: "bash", ToolArgs: "pwd"},
+			{Type: harness.EventToolCall, ToolName: "bash", ToolArgs: `{"command":"pwd","description":"Print current working directory"}`},
+			{Type: harness.EventToolResult, ToolName: "bash"},
 		})
 	})
 
@@ -513,7 +515,7 @@ func TestParseStreamLine(t *testing.T) {
 		}
 	})
 
-	t.Run("skips non-allowlisted tools", func(t *testing.T) {
+	t.Run("emits unknown tools", func(t *testing.T) {
 		p := New("anthropic/claude-3-5-sonnet")
 		line := jsonStr(map[string]any{
 			"type": "message.part.updated",
@@ -528,9 +530,10 @@ func TestParseStreamLine(t *testing.T) {
 				},
 			},
 		})
-		if events := p.ParseStreamLine(line); len(events) != 0 {
-			t.Errorf("expected empty, got %+v", events)
-		}
+		assertEqual(t, p.ParseStreamLine(line), []harness.Event{
+			{Type: harness.EventToolCall, ToolName: "some_unknown_tool", ToolArgs: `{"foo":"bar"}`},
+			{Type: harness.EventToolResult, ToolName: "some_unknown_tool"},
+		})
 	})
 
 	t.Run("session.status idle emits EventResult with last text", func(t *testing.T) {
@@ -683,8 +686,9 @@ func assertEqual(t *testing.T, got, want []harness.Event) {
 	}
 	for i := range got {
 		if got[i].Type != want[i].Type || got[i].Text != want[i].Text ||
-			got[i].Result != want[i].Result || got[i].ToolName != want[i].ToolName ||
-			got[i].ToolArgs != want[i].ToolArgs {
+			got[i].Result != want[i].Result || got[i].ToolID != want[i].ToolID ||
+			got[i].ToolName != want[i].ToolName || got[i].ToolArgs != want[i].ToolArgs ||
+			got[i].ToolOutput != want[i].ToolOutput || got[i].ToolError != want[i].ToolError {
 			t.Errorf("event[%d] = %+v, want %+v", i, got[i], want[i])
 		}
 	}

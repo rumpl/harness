@@ -1,11 +1,16 @@
 package pi
 
-import "github.com/rumpl/harness"
+import (
+	"encoding/json"
+
+	"github.com/rumpl/harness"
+)
 
 // parseStreamLine handles the Pi JSON streaming format.
-// It recognises three event shapes:
+// It recognises these event shapes:
 //   - {"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"..."}} → text events
 //   - {"type":"tool_execution_start",...} → tool_call events
+//   - {"type":"tool_execution_result",...} → tool_result events
 //   - {"type":"agent_end","messages":[...]} → result events
 func parseStreamLine(line string) []harness.Event {
 	obj, ok := harness.ParseJSON(line)
@@ -20,6 +25,8 @@ func parseStreamLine(line string) []harness.Event {
 		return parseMessageUpdate(obj)
 	case "tool_execution_start":
 		return parseToolExecution(obj)
+	case "tool_execution_result", "tool_execution_end", "tool_execution_completed":
+		return parseToolExecutionResult(obj)
 	case "agent_end":
 		return parseAgentEnd(obj)
 	}
@@ -44,26 +51,66 @@ func parseMessageUpdate(obj map[string]any) []harness.Event {
 
 func parseToolExecution(obj map[string]any) []harness.Event {
 	toolName, ok := obj["tool_name"].(string)
-	if !ok {
+	if !ok || toolName == "" {
 		return nil
 	}
-	argField, ok := harness.ToolArgFields[toolName]
-	if !ok {
-		return nil
-	}
-	input, ok := obj["input"].(map[string]any)
-	if !ok {
-		return nil
-	}
-	argValue, ok := input[argField].(string)
-	if !ok {
-		return nil
-	}
+	input, _ := obj["input"].(map[string]any)
 	return []harness.Event{{
 		Type:     harness.EventToolCall,
+		ToolID:   firstString(obj, "tool_execution_id", "tool_call_id", "id"),
 		ToolName: toolName,
-		ToolArgs: argValue,
+		ToolArgs: jsonObjectString(input),
 	}}
+}
+
+func jsonObjectString(input map[string]any) string {
+	if input == nil {
+		return ""
+	}
+	b, err := json.Marshal(input)
+	if err != nil {
+		return ""
+	}
+	return string(b)
+}
+
+func parseToolExecutionResult(obj map[string]any) []harness.Event {
+	return []harness.Event{{
+		Type:       harness.EventToolResult,
+		ToolID:     firstString(obj, "tool_execution_id", "tool_call_id", "id"),
+		ToolName:   firstString(obj, "tool_name", "name"),
+		ToolOutput: toolExecutionOutput(obj),
+		ToolError:  toolExecutionErrored(obj),
+	}}
+}
+
+func toolExecutionOutput(obj map[string]any) string {
+	if output := firstString(obj, "output", "result", "content", "stderr", "stdout"); output != "" {
+		return output
+	}
+	if result, ok := obj["result"].(map[string]any); ok {
+		return firstString(result, "output", "content", "stderr", "stdout")
+	}
+	return ""
+}
+
+func toolExecutionErrored(obj map[string]any) bool {
+	if isError, ok := obj["is_error"].(bool); ok {
+		return isError
+	}
+	if _, ok := obj["error"].(string); ok {
+		return true
+	}
+	return false
+}
+
+func firstString(m map[string]any, keys ...string) string {
+	for _, key := range keys {
+		if value, ok := m[key].(string); ok {
+			return value
+		}
+	}
+	return ""
 }
 
 func parseAgentEnd(obj map[string]any) []harness.Event {

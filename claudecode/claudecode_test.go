@@ -50,6 +50,17 @@ func TestPrintCommand(t *testing.T) {
 		}
 	})
 
+	t.Run("strips anthropic provider prefix from model", func(t *testing.T) {
+		p := New("anthropic/claude-opus-4-6")
+		cmd := p.PrintCommand("do something")
+		if !strings.Contains(cmd, "--model 'claude-opus-4-6'") {
+			t.Errorf("PrintCommand did not strip anthropic prefix: %q", cmd)
+		}
+		if strings.Contains(cmd, "anthropic/claude-opus-4-6") {
+			t.Errorf("PrintCommand should not pass provider/model form to claude: %q", cmd)
+		}
+	})
+
 	t.Run("includes effort when set", func(t *testing.T) {
 		p := New("claude-opus-4-6", WithEffort(EffortHigh))
 		cmd := p.PrintCommand("do something")
@@ -86,6 +97,17 @@ func TestInteractiveArgs(t *testing.T) {
 		}
 		if !contains(args, "claude-sonnet-4-6") || !contains(args, "--model") {
 			t.Errorf("args missing model: %v", args)
+		}
+	})
+
+	t.Run("strips anthropic provider prefix from model", func(t *testing.T) {
+		p := New("anthropic/claude-opus-4-6")
+		args := p.InteractiveArgs("")
+		if !contains(args, "claude-opus-4-6") {
+			t.Errorf("args missing normalized model: %v", args)
+		}
+		if contains(args, "anthropic/claude-opus-4-6") {
+			t.Errorf("args should not pass provider/model form to claude: %v", args)
 		}
 	})
 
@@ -161,11 +183,32 @@ func TestParseStreamLine(t *testing.T) {
 		})
 		events := p.ParseStreamLine(line)
 		assertEqual(t, events, []harness.Event{
-			{Type: harness.EventToolCall, ToolName: "Bash", ToolArgs: "npm test"},
+			{Type: harness.EventToolCall, ToolName: "Bash", ToolArgs: `{"command":"npm test"}`},
 		})
 	})
 
-	t.Run("skips non-allowlisted tools", func(t *testing.T) {
+	t.Run("extracts text and Write tool_use from assistant message", func(t *testing.T) {
+		line := jsonStr(map[string]any{
+			"type": "assistant",
+			"message": map[string]any{
+				"content": []any{
+					map[string]any{"type": "text", "text": "I'll write the file."},
+					map[string]any{
+						"type":  "tool_use",
+						"name":  "Write",
+						"input": map[string]any{"file_path": "/tmp/poem.md", "content": "roses"},
+					},
+				},
+			},
+		})
+		events := p.ParseStreamLine(line)
+		assertEqual(t, events, []harness.Event{
+			{Type: harness.EventText, Text: "I'll write the file."},
+			{Type: harness.EventToolCall, ToolName: "Write", ToolArgs: `{"content":"roses","file_path":"/tmp/poem.md"}`},
+		})
+	})
+
+	t.Run("extracts unknown tools", func(t *testing.T) {
 		line := jsonStr(map[string]any{
 			"type": "assistant",
 			"message": map[string]any{
@@ -179,9 +222,113 @@ func TestParseStreamLine(t *testing.T) {
 			},
 		})
 		events := p.ParseStreamLine(line)
-		if len(events) != 0 {
-			t.Errorf("expected empty events, got %+v", events)
-		}
+		assertEqual(t, events, []harness.Event{
+			{Type: harness.EventToolCall, ToolName: "UnknownTool", ToolArgs: `{"foo":"bar"}`},
+		})
+	})
+
+	t.Run("does not replay assistant text after partial text deltas", func(t *testing.T) {
+		p := New("claude-opus-4-6")
+		events := p.ParseStreamLine(jsonStr(map[string]any{
+			"type": "stream_event",
+			"event": map[string]any{
+				"type":  "content_block_delta",
+				"index": 0,
+				"delta": map[string]any{"type": "text_delta", "text": "Hello"},
+			},
+		}))
+		assertEqual(t, events, []harness.Event{{Type: harness.EventText, Text: "Hello"}})
+
+		events = p.ParseStreamLine(jsonStr(map[string]any{
+			"type": "stream_event",
+			"event": map[string]any{
+				"type":  "content_block_delta",
+				"index": 0,
+				"delta": map[string]any{"type": "text_delta", "text": " world"},
+			},
+		}))
+		assertEqual(t, events, []harness.Event{{Type: harness.EventText, Text: " world"}})
+
+		events = p.ParseStreamLine(jsonStr(map[string]any{
+			"type": "assistant",
+			"message": map[string]any{
+				"content": []any{map[string]any{"type": "text", "text": "Hello world"}},
+			},
+		}))
+		assertEqual(t, events, nil)
+	})
+
+	t.Run("streams partial tool use and skips assistant snapshot", func(t *testing.T) {
+		p := New("claude-opus-4-6")
+		assertEqual(t, p.ParseStreamLine(jsonStr(map[string]any{
+			"type": "stream_event",
+			"event": map[string]any{
+				"type":  "content_block_start",
+				"index": 1,
+				"content_block": map[string]any{
+					"type": "tool_use",
+					"id":   "toolu_1",
+					"name": "Bash",
+				},
+			},
+		})), []harness.Event{{Type: harness.EventToolCallStart, ToolID: "toolu_1", ToolName: "Bash"}})
+		assertEqual(t, p.ParseStreamLine(jsonStr(map[string]any{
+			"type": "stream_event",
+			"event": map[string]any{
+				"type":  "content_block_delta",
+				"index": 1,
+				"delta": map[string]any{"type": "input_json_delta", "partial_json": "{\"command\":\"uname -a\"}"},
+			},
+		})), []harness.Event{{Type: harness.EventToolCallDelta, ToolID: "toolu_1", ToolName: "Bash", ToolArgs: "{\"command\":\"uname -a\"}"}})
+		assertEqual(t, p.ParseStreamLine(jsonStr(map[string]any{
+			"type":  "stream_event",
+			"event": map[string]any{"type": "content_block_stop", "index": 1},
+		})), []harness.Event{{Type: harness.EventToolCall, ToolID: "toolu_1", ToolName: "Bash"}})
+
+		events := p.ParseStreamLine(jsonStr(map[string]any{
+			"type": "assistant",
+			"message": map[string]any{
+				"content": []any{map[string]any{
+					"type":  "tool_use",
+					"id":    "toolu_1",
+					"name":  "Bash",
+					"input": map[string]any{"command": "uname -a"},
+				}},
+			},
+		}))
+		assertEqual(t, events, nil)
+	})
+
+	t.Run("extracts tool result from user message", func(t *testing.T) {
+		p := New("claude-opus-4-6")
+		_ = p.ParseStreamLine(jsonStr(map[string]any{
+			"type": "assistant",
+			"message": map[string]any{
+				"content": []any{map[string]any{
+					"type":  "tool_use",
+					"id":    "toolu_2",
+					"name":  "Bash",
+					"input": map[string]any{"command": "uname -a"},
+				}},
+			},
+		}))
+
+		events := p.ParseStreamLine(jsonStr(map[string]any{
+			"type": "user",
+			"message": map[string]any{
+				"content": []any{map[string]any{
+					"type":        "tool_result",
+					"tool_use_id": "toolu_2",
+					"content":     "Darwin localhost 25.0.0",
+				}},
+			},
+		}))
+		assertEqual(t, events, []harness.Event{{
+			Type:       harness.EventToolResult,
+			ToolID:     "toolu_2",
+			ToolName:   "Bash",
+			ToolOutput: "Darwin localhost 25.0.0",
+		}})
 	})
 
 	t.Run("returns empty for non-JSON", func(t *testing.T) {
@@ -236,8 +383,9 @@ func assertEqual(t *testing.T, got, want []harness.Event) {
 	}
 	for i := range got {
 		if got[i].Type != want[i].Type || got[i].Text != want[i].Text ||
-			got[i].Result != want[i].Result || got[i].ToolName != want[i].ToolName ||
-			got[i].ToolArgs != want[i].ToolArgs {
+			got[i].Result != want[i].Result || got[i].ToolID != want[i].ToolID ||
+			got[i].ToolName != want[i].ToolName || got[i].ToolArgs != want[i].ToolArgs ||
+			got[i].ToolOutput != want[i].ToolOutput || got[i].ToolError != want[i].ToolError {
 			t.Errorf("event[%d] = %+v, want %+v", i, got[i], want[i])
 		}
 	}

@@ -54,53 +54,13 @@ func parseToolCall(obj map[string]any) []harness.Event {
 		return nil
 	}
 
-	// Arguments come as a JSON string; try to extract the relevant field
-	argsRaw, _ := fn["arguments"].(string)
-	args := extractToolArgs(name, argsRaw)
+	args, _ := fn["arguments"].(string)
 
 	return []harness.Event{{
 		Type:     harness.EventToolCall,
 		ToolName: name,
 		ToolArgs: args,
 	}}
-}
-
-// extractToolArgs parses the JSON arguments string and extracts the relevant
-// field based on the tool name.
-func extractToolArgs(toolName, argsJSON string) string {
-	if argsJSON == "" {
-		return ""
-	}
-
-	var argsMap map[string]any
-	if err := json.Unmarshal([]byte(argsJSON), &argsMap); err != nil {
-		// If we can't parse it, return the raw JSON
-		return argsJSON
-	}
-
-	// Map docker-agent tool names to their argument fields
-	argFieldMap := map[string]string{
-		"shell":       "cmd",
-		"read_file":   "path",
-		"write_file":  "path",
-		"edit_file":   "path",
-		"search":      "pattern",
-		"glob":        "pattern",
-		"grep":        "pattern",
-		"Bash":        "command",
-		"WebSearch":   "query",
-		"WebFetch":    "url",
-		"Agent":       "description",
-	}
-
-	if field, ok := argFieldMap[toolName]; ok {
-		if val, ok := argsMap[field].(string); ok {
-			return val
-		}
-	}
-
-	// Fallback: return the raw JSON
-	return argsJSON
 }
 
 func parseTokenUsage(obj map[string]any) []harness.Event {

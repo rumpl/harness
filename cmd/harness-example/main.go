@@ -64,8 +64,14 @@ func main() {
 		switch ev.Type {
 		case harness.EventText:
 			fmt.Print(ev.Text)
+		case harness.EventToolCallStart:
+			fmt.Fprintf(os.Stderr, "\n[tool: %s]\n", ev.ToolName)
+		case harness.EventToolCallDelta:
+			fmt.Fprintf(os.Stderr, "%s", ev.ToolArgs)
 		case harness.EventToolCall:
 			fmt.Fprintf(os.Stderr, "\n[tool: %s] %s\n", ev.ToolName, ev.ToolArgs)
+		case harness.EventToolResult:
+			fmt.Fprintf(os.Stderr, "\n[tool result: %s] %s\n", ev.ToolName, ev.ToolOutput)
 		case harness.EventResult:
 			fmt.Fprintf(os.Stderr, "\n--- result ---\n")
 			fmt.Println(ev.Result)

@@ -4,6 +4,7 @@ package claudecode
 
 import (
 	"fmt"
+	"strings"
 
 	"github.com/rumpl/harness"
 )
@@ -29,11 +30,18 @@ func WithEffort(e Effort) Option {
 type provider struct {
 	model  string
 	effort Effort
+	parser *parser
 }
 
 // New creates a Claude Code [harness.Provider] for the given model.
+//
+// Claude Code expects bare Claude model IDs (for example
+// "claude-sonnet-4-6"), but callers may provide Anthropic model IDs in the
+// provider/model form used by other CLIs (for example
+// "anthropic/claude-sonnet-4-6"). The anthropic/ prefix is stripped before
+// invoking the Claude Code CLI.
 func New(model string, opts ...Option) harness.Provider {
-	p := &provider{model: model}
+	p := &provider{model: normalizeModel(model), parser: newParser()}
 	for _, o := range opts {
 		o(p)
 	}
@@ -41,6 +49,11 @@ func New(model string, opts ...Option) harness.Provider {
 }
 
 func (p *provider) Name() string { return "claude-code" }
+
+func normalizeModel(model string) string {
+	const providerPrefix = "anthropic/"
+	return strings.TrimPrefix(model, providerPrefix)
+}
 
 func (p *provider) PrintCommand(prompt string) string {
 	modelFlag := ""
@@ -71,7 +84,10 @@ func (p *provider) InteractiveArgs(_ string) []string {
 }
 
 func (p *provider) ParseStreamLine(line string) []Event {
-	return parseStreamLine(line)
+	if p.parser == nil {
+		p.parser = newParser()
+	}
+	return p.parser.parseLine(line)
 }
 
 // Event is an alias for [harness.Event] so callers importing only this

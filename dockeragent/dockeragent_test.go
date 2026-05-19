@@ -86,7 +86,7 @@ func TestParseStreamLine(t *testing.T) {
 		})
 		events := p.ParseStreamLine(line)
 		assertEqual(t, events, []harness.Event{
-			{Type: harness.EventToolCall, ToolName: "shell", ToolArgs: "ls -l"},
+			{Type: harness.EventToolCall, ToolName: "shell", ToolArgs: `{"cmd": "ls -l"}`},
 		})
 	})
 
@@ -190,7 +190,7 @@ func TestParseStreamLine(t *testing.T) {
 		}
 	})
 
-	t.Run("tool_call falls back to raw JSON for unknown tools", func(t *testing.T) {
+	t.Run("tool_call preserves raw JSON arguments", func(t *testing.T) {
 		line := jsonStr(map[string]any{
 			"type": "tool_call",
 			"tool_call": map[string]any{
@@ -221,7 +221,7 @@ func TestParseStreamLine(t *testing.T) {
 		})
 		events := p.ParseStreamLine(line)
 		assertEqual(t, events, []harness.Event{
-			{Type: harness.EventToolCall, ToolName: "read_file", ToolArgs: "/tmp/test.txt"},
+			{Type: harness.EventToolCall, ToolName: "read_file", ToolArgs: `{"path": "/tmp/test.txt"}`},
 		})
 	})
 
@@ -237,7 +237,7 @@ func TestParseStreamLine(t *testing.T) {
 		})
 		events := p.ParseStreamLine(line)
 		assertEqual(t, events, []harness.Event{
-			{Type: harness.EventToolCall, ToolName: "search", ToolArgs: "TODO"},
+			{Type: harness.EventToolCall, ToolName: "search", ToolArgs: `{"pattern": "TODO", "path": "."}`},
 		})
 	})
 
