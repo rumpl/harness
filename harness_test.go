@@ -3,7 +3,15 @@ package harness
 import (
 	"context"
 	"testing"
+	"time"
 )
+
+type testContext struct{}
+
+func (testContext) Deadline() (time.Time, bool) { return time.Time{}, false }
+func (testContext) Done() <-chan struct{}       { return nil }
+func (testContext) Err() error                  { return nil }
+func (testContext) Value(any) any               { return nil }
 
 func TestShellEscape(t *testing.T) {
 	tests := []struct {
@@ -133,7 +141,7 @@ func (p *customRunProvider) Run(_ context.Context, prompt string, fn func(Event)
 func TestRunUsesCustomStreamingProvider(t *testing.T) {
 	p := &customRunProvider{}
 	var got []Event
-	if err := Run(context.Background(), p, "hello", func(ev Event) {
+	if err := Run(testContext{}, p, "hello", func(ev Event) {
 		got = append(got, ev)
 	}); err != nil {
 		t.Fatalf("Run returned error: %v", err)

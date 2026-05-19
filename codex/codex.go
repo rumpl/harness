@@ -22,7 +22,7 @@ func (p *provider) Name() string { return "codex" }
 func (p *provider) PrintCommand(prompt string) string {
 	modelFlag := ""
 	if p.model != "" {
-		modelFlag = fmt.Sprintf(" -m %s", harness.ShellEscape(p.model))
+		modelFlag = " -m " + harness.ShellEscape(p.model)
 	}
 	return fmt.Sprintf(
 		"codex exec --json --dangerously-bypass-approvals-and-sandbox%s %s",

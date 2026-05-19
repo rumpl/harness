@@ -12,7 +12,7 @@ import (
 // transport to stream events. Providers that do not implement it fall back to
 // PrintCommand and ParseStreamLine below.
 type streamingProvider interface {
-	Run(context.Context, string, func(Event)) error
+	Run(ctx context.Context, prompt string, fn func(Event)) error
 }
 
 // Run executes the provider in print (non-interactive) mode and streams

@@ -21,7 +21,7 @@ func (p *provider) Name() string { return "pi" }
 func (p *provider) PrintCommand(prompt string) string {
 	modelFlag := ""
 	if p.model != "" {
-		modelFlag = fmt.Sprintf(" --model %s", harness.ShellEscape(p.model))
+		modelFlag = " --model " + harness.ShellEscape(p.model)
 	}
 	return fmt.Sprintf(
 		"pi -p --mode json --no-session%s %s",

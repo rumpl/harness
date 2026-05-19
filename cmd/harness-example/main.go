@@ -55,7 +55,6 @@ func main() {
 	}
 
 	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
-	defer cancel()
 
 	fmt.Fprintf(os.Stderr, "provider: %s\n", p.Name())
 	fmt.Fprintf(os.Stderr, "prompt:   %s\n\n", prompt)
@@ -87,6 +86,7 @@ func main() {
 			}
 		}
 	})
+	cancel()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)

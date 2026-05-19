@@ -38,7 +38,7 @@ func (p *provider) Run(ctx context.Context, prompt string, fn func(harness.Event
 		return fmt.Errorf("get cwd: %w", err)
 	}
 
-	port, err := freePort()
+	port, err := freePort(ctx)
 	if err != nil {
 		return err
 	}
@@ -194,7 +194,7 @@ func (p *provider) readEvents(body io.Reader, sessionID string, fn func(harness.
 }
 
 func openEventStream(ctx context.Context, client *http.Client, baseURL, cwd string) (*http.Response, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/event?"+directoryQuery(cwd), nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, baseURL+"/event?"+directoryQuery(cwd), http.NoBody)
 	if err != nil {
 		return nil, err
 	}
@@ -232,7 +232,7 @@ func waitForServer(ctx context.Context, client *http.Client, baseURL string) err
 func serverHealthy(ctx context.Context, client *http.Client, baseURL string) bool {
 	reqCtx, cancel := context.WithTimeout(ctx, time.Second)
 	defer cancel()
-	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, baseURL+"/global/health", nil)
+	req, err := http.NewRequestWithContext(reqCtx, http.MethodGet, baseURL+"/global/health", http.NoBody)
 	if err != nil {
 		return false
 	}
@@ -241,11 +241,11 @@ func serverHealthy(ctx context.Context, client *http.Client, baseURL string) boo
 		return false
 	}
 	defer resp.Body.Close()
-	io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
+	_, _ = io.Copy(io.Discard, io.LimitReader(resp.Body, 1024))
 	return resp.StatusCode >= 200 && resp.StatusCode < 300
 }
 
-func doJSON(ctx context.Context, client *http.Client, method, endpoint string, body any, out any) error {
+func doJSON(ctx context.Context, client *http.Client, method, endpoint string, body, out any) error {
 	var reader io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -274,7 +274,7 @@ func doJSON(ctx context.Context, client *http.Client, method, endpoint string, b
 		return fmt.Errorf("%s: %s", resp.Status, strings.TrimSpace(string(b)))
 	}
 	if out == nil {
-		io.Copy(io.Discard, resp.Body)
+		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil
 	}
 	return json.NewDecoder(resp.Body).Decode(out)
@@ -317,12 +317,12 @@ func titleFromPrompt(prompt string) string {
 	if prompt == "" {
 		return "harness run"
 	}
-	const max = 80
+	const maxTitleRunes = 80
 	runes := []rune(prompt)
-	if len(runes) <= max {
+	if len(runes) <= maxTitleRunes {
 		return prompt
 	}
-	return string(runes[:max])
+	return string(runes[:maxTitleRunes])
 }
 
 func directoryQuery(cwd string) string {
@@ -345,8 +345,9 @@ func withoutEnv(env []string, keys ...string) []string {
 	return out
 }
 
-func freePort() (int, error) {
-	ln, err := net.Listen("tcp", "127.0.0.1:0")
+func freePort(ctx context.Context) (int, error) {
+	var listenConfig net.ListenConfig
+	ln, err := listenConfig.Listen(ctx, "tcp", "127.0.0.1:0")
 	if err != nil {
 		return 0, fmt.Errorf("find free port: %w", err)
 	}

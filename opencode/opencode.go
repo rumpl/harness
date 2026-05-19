@@ -47,10 +47,10 @@ func (p *provider) Name() string { return "opencode" }
 func (p *provider) PrintCommand(prompt string) string {
 	extra := ""
 	if p.model != "" {
-		extra += fmt.Sprintf(" --model %s", harness.ShellEscape(p.model))
+		extra += " --model " + harness.ShellEscape(p.model)
 	}
 	if p.agent != "" {
-		extra += fmt.Sprintf(" --agent %s", harness.ShellEscape(p.agent))
+		extra += " --agent " + harness.ShellEscape(p.agent)
 	}
 	if p.thinking {
 		extra += " --thinking"
