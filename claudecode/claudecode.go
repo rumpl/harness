@@ -43,20 +43,27 @@ func New(model string, opts ...Option) harness.Provider {
 func (p *provider) Name() string { return "claude-code" }
 
 func (p *provider) PrintCommand(prompt string) string {
+	modelFlag := ""
+	if p.model != "" {
+		modelFlag = fmt.Sprintf(" --model %s", harness.ShellEscape(p.model))
+	}
 	effortFlag := ""
 	if p.effort != "" {
 		effortFlag = fmt.Sprintf(" --effort %s", p.effort)
 	}
 	return fmt.Sprintf(
-		"claude --print --verbose --dangerously-skip-permissions --include-partial-messages --output-format stream-json --model %s%s -p %s",
-		harness.ShellEscape(p.model),
+		"claude --print --verbose --dangerously-skip-permissions --include-partial-messages --output-format stream-json%s%s -p %s",
+		modelFlag,
 		effortFlag,
 		harness.ShellEscape(prompt),
 	)
 }
 
 func (p *provider) InteractiveArgs(_ string) []string {
-	args := []string{"claude", "--dangerously-skip-permissions", "--model", p.model}
+	args := []string{"claude", "--dangerously-skip-permissions"}
+	if p.model != "" {
+		args = append(args, "--model", p.model)
+	}
 	if p.effort != "" {
 		args = append(args, "--effort", string(p.effort))
 	}

@@ -39,6 +39,14 @@ func TestPrintCommand(t *testing.T) {
 		}
 	})
 
+	t.Run("omits model flag when empty", func(t *testing.T) {
+		p := New("")
+		cmd := p.PrintCommand("do something")
+		if strings.Contains(cmd, "--model") {
+			t.Errorf("PrintCommand should not contain --model: %q", cmd)
+		}
+	})
+
 	t.Run("includes agent when set", func(t *testing.T) {
 		p := New("anthropic/claude-3-5-sonnet", WithAgent("plan"))
 		cmd := p.PrintCommand("do something")
@@ -89,6 +97,14 @@ func TestInteractiveArgs(t *testing.T) {
 		args := p.InteractiveArgs("")
 		if !contains(args, "--agent") || !contains(args, "plan") {
 			t.Errorf("args missing agent: %v", args)
+		}
+	})
+
+	t.Run("omits model when empty", func(t *testing.T) {
+		p := New("")
+		args := p.InteractiveArgs("")
+		if contains(args, "--model") {
+			t.Errorf("args should not contain model: %v", args)
 		}
 	})
 

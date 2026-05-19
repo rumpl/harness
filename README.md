@@ -60,6 +60,8 @@ p := opencode.New("anthropic/claude-sonnet-4-6")
 
 The rest of your code stays exactly the same — all providers implement `harness.Provider`.
 
+For providers whose CLIs have their own default model, pass an empty model string to omit the model flag entirely (for example, `codex.New("")` emits `codex exec ...` without `-m`).
+
 ## The `Provider` interface
 
 ```go

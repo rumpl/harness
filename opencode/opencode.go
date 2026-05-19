@@ -46,6 +46,9 @@ func (p *provider) Name() string { return "opencode" }
 
 func (p *provider) PrintCommand(prompt string) string {
 	extra := ""
+	if p.model != "" {
+		extra += fmt.Sprintf(" --model %s", harness.ShellEscape(p.model))
+	}
 	if p.agent != "" {
 		extra += fmt.Sprintf(" --agent %s", harness.ShellEscape(p.agent))
 	}
@@ -53,15 +56,17 @@ func (p *provider) PrintCommand(prompt string) string {
 		extra += " --thinking"
 	}
 	return fmt.Sprintf(
-		"opencode run --format json --dangerously-skip-permissions --model %s%s %s",
-		harness.ShellEscape(p.model),
+		"opencode run --format json --dangerously-skip-permissions%s %s",
 		extra,
 		harness.ShellEscape(prompt),
 	)
 }
 
 func (p *provider) InteractiveArgs(_ string) []string {
-	args := []string{"opencode", "--model", p.model}
+	args := []string{"opencode"}
+	if p.model != "" {
+		args = append(args, "--model", p.model)
+	}
 	if p.agent != "" {
 		args = append(args, "--agent", p.agent)
 	}

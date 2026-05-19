@@ -20,15 +20,23 @@ func New(model string) harness.Provider {
 func (p *provider) Name() string { return "codex" }
 
 func (p *provider) PrintCommand(prompt string) string {
+	modelFlag := ""
+	if p.model != "" {
+		modelFlag = fmt.Sprintf(" -m %s", harness.ShellEscape(p.model))
+	}
 	return fmt.Sprintf(
-		"codex exec --json --dangerously-bypass-approvals-and-sandbox -m %s %s",
-		harness.ShellEscape(p.model),
+		"codex exec --json --dangerously-bypass-approvals-and-sandbox%s %s",
+		modelFlag,
 		harness.ShellEscape(prompt),
 	)
 }
 
 func (p *provider) InteractiveArgs(_ string) []string {
-	return []string{"codex", "--model", p.model}
+	args := []string{"codex"}
+	if p.model != "" {
+		args = append(args, "--model", p.model)
+	}
+	return args
 }
 
 func (p *provider) ParseStreamLine(line string) []Event {
