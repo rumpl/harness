@@ -2,6 +2,7 @@ package pi
 
 import (
 	"encoding/json"
+	"slices"
 	"strings"
 
 	"github.com/rumpl/harness"
@@ -123,8 +124,8 @@ func parseAgentEnd(obj map[string]any) []harness.Event {
 	// Find the last assistant message and extract its text content.
 	var result string
 	var lastAssistant map[string]any
-	for i := len(msgs) - 1; i >= 0; i-- {
-		msg, ok := msgs[i].(map[string]any)
+	for _, v := range slices.Backward(msgs) {
+		msg, ok := v.(map[string]any)
 		if !ok {
 			continue
 		}
