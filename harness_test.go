@@ -229,3 +229,67 @@ func TestParseJSON(t *testing.T) {
 		}
 	})
 }
+
+// lineProvider parses each stdout line into one EventText carrying the line's
+// byte length, so a test can assert the whole (possibly very large) line was
+// delivered intact.
+type lineProvider struct{ command string }
+
+func (p *lineProvider) Name() string                    { return "line" }
+func (p *lineProvider) PrintCommand(string) string      { return p.command }
+func (p *lineProvider) InteractiveArgs(string) []string { return nil }
+func (p *lineProvider) ParseStreamLine(line string) []Event {
+	if line == "" {
+		return nil
+	}
+	return []Event{{Type: EventText, Text: line}}
+}
+
+// TestRunHandlesLargeStreamLines guards against the 64KB bufio.Scanner default:
+// an agent CLI that emits a single line bigger than 64KB must not stall the
+// reader (which previously left the child blocked on a full stdout pipe).
+func TestRunHandlesLargeStreamLines(t *testing.T) {
+	const size = 512 * 1024 // 512 KiB, far past the old 64KB limit
+	// Print one giant line, then a small one, then exit 0.
+	command := "printf 'a%.0s' $(seq 1 " + itoa(size) + "); printf '\\n'; printf 'end\\n'"
+	p := &lineProvider{command: command}
+
+	var lines []int
+	done := make(chan error, 1)
+	go func() {
+		done <- Run(context.Background(), p, "", func(ev Event) {
+			lines = append(lines, len(ev.Text))
+		})
+	}()
+
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("Run returned error: %v", err)
+		}
+	case <-time.After(10 * time.Second):
+		t.Fatal("Run hung on a large stream line")
+	}
+
+	if len(lines) != 2 {
+		t.Fatalf("got %d lines, want 2: %v", len(lines), lines)
+	}
+	if lines[0] != size {
+		t.Fatalf("first line length = %d, want %d", lines[0], size)
+	}
+	if lines[1] != 3 {
+		t.Fatalf("second line length = %d, want 3 (\"end\")", lines[1])
+	}
+}
+
+func itoa(n int) string {
+	if n == 0 {
+		return "0"
+	}
+	var b []byte
+	for n > 0 {
+		b = append([]byte{byte('0' + n%10)}, b...)
+		n /= 10
+	}
+	return string(b)
+}

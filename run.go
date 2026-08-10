@@ -9,6 +9,16 @@ import (
 	"os/exec"
 )
 
+const (
+	// initialStreamBufferBytes is the starting size of the stdout line buffer.
+	// It grows up to maxStreamLineBytes as needed.
+	initialStreamBufferBytes = 64 * 1024
+	// maxStreamLineBytes bounds a single newline-delimited JSON line from an
+	// agent CLI. Tool results and streamed content blocks can be large; 16 MiB
+	// is generous while still guarding against unbounded memory growth.
+	maxStreamLineBytes = 16 * 1024 * 1024
+)
+
 // streamingProvider is an optional interface for providers that need a custom
 // transport to stream events. Providers that do not implement it fall back to
 // PrintCommand and ParseStreamLine below.
@@ -65,6 +75,12 @@ func runCommand(ctx context.Context, p Provider, command string, fn func(Event))
 	}
 
 	scanner := bufio.NewScanner(stdout)
+	// Agent CLIs emit newline-delimited JSON where a single line (a large tool
+	// result, a streamed content block, a big todo list) routinely exceeds
+	// bufio.Scanner's default 64KB token limit. Without a larger buffer, Scan
+	// stops at the first oversized line, the child's stdout pipe fills, and the
+	// process blocks forever in Wait. Allow lines up to maxStreamLineBytes.
+	scanner.Buffer(make([]byte, 0, initialStreamBufferBytes), maxStreamLineBytes)
 	for scanner.Scan() {
 		line := scanner.Text()
 		for _, ev := range p.ParseStreamLine(line) {
