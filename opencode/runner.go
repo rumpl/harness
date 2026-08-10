@@ -26,6 +26,16 @@ const serverReadyTimeout = 10 * time.Second
 // CLI's `run --format json` output only emits completed text parts, while the
 // server event stream emits message.part.delta events as tokens arrive.
 func (p *provider) Run(ctx context.Context, prompt string, fn func(harness.Event)) error {
+	return p.run(ctx, "", prompt, fn)
+}
+
+// Resume continues an existing opencode session through the same HTTP/SSE
+// transport used by Run.
+func (p *provider) Resume(ctx context.Context, sessionID, prompt string, fn func(harness.Event)) error {
+	return p.run(ctx, sessionID, prompt, fn)
+}
+
+func (p *provider) run(ctx context.Context, resumeSessionID, prompt string, fn func(harness.Event)) error {
 	p.parser = &parser{}
 
 	providerID, modelID, err := splitModel(p.model)
@@ -61,10 +71,16 @@ func (p *provider) Run(ctx context.Context, prompt string, fn func(harness.Event
 		return err
 	}
 
-	sessionID, err := p.createSession(ctx, client, baseURL, cwd, providerID, modelID, prompt)
+	sessionID := resumeSessionID
+	if sessionID == "" {
+		sessionID, err = p.createSession(ctx, client, baseURL, cwd, providerID, modelID, prompt)
+	} else {
+		err = p.requireSession(ctx, client, baseURL, cwd, sessionID)
+	}
 	if err != nil {
 		return err
 	}
+	fn(harness.Event{Type: harness.EventSessionID, SessionID: sessionID})
 
 	runCtx, cancelRun := context.WithCancel(ctx)
 	defer cancelRun()
@@ -140,6 +156,20 @@ func (p *provider) createSession(ctx context.Context, client *http.Client, baseU
 		return "", errors.New("create opencode session: empty session id")
 	}
 	return resp.ID, nil
+}
+
+func (p *provider) requireSession(ctx context.Context, client *http.Client, baseURL, cwd, sessionID string) error {
+	var resp struct {
+		ID string `json:"id"`
+	}
+	endpoint := baseURL + "/session/" + url.PathEscape(sessionID) + "?" + directoryQuery(cwd)
+	if err := doJSON(ctx, client, http.MethodGet, endpoint, nil, &resp); err != nil {
+		return fmt.Errorf("resume opencode session %q: %w", sessionID, err)
+	}
+	if resp.ID == "" {
+		return fmt.Errorf("resume opencode session %q: empty session id", sessionID)
+	}
+	return nil
 }
 
 func (p *provider) postPrompt(ctx context.Context, client *http.Client, baseURL, cwd, sessionID, providerID, modelID, prompt string) error {

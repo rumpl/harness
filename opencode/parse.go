@@ -44,7 +44,12 @@ func (p *parser) parseLine(line string) []harness.Event {
 	case "session.status":
 		return p.parseSessionStatus(obj)
 	case "step_start":
-		return p.parseStepStart(obj)
+		events := p.parseStepStart(obj)
+		sessionID, _ := obj["sessionID"].(string)
+		if sessionID == "" {
+			return events
+		}
+		return append([]harness.Event{{Type: harness.EventSessionID, SessionID: sessionID}}, events...)
 	case "step_finish":
 		return p.parseStepFinish(obj)
 	case "text":

@@ -35,6 +35,7 @@ func main() {
 	effort := flag.String("effort", "", "effort level for claude-code (low, medium, high, max)")
 	printCmd := flag.Bool("print-cmd", false, "print the shell command instead of executing it")
 	printArgs := flag.Bool("print-args", false, "print the interactive args instead of executing")
+	resumeSession := flag.String("resume", "", "session ID to resume")
 	flag.Parse()
 
 	if flag.NArg() < 1 {
@@ -46,7 +47,16 @@ func main() {
 	p := newProvider(*providerName, *model, *effort)
 
 	if *printCmd {
-		fmt.Println(p.PrintCommand(prompt))
+		if *resumeSession == "" {
+			fmt.Println(p.PrintCommand(prompt))
+			return
+		}
+		rp, ok := p.(harness.ResumableProvider)
+		if !ok {
+			fmt.Fprintf(os.Stderr, "provider %s does not support sessions\n", p.Name())
+			os.Exit(1)
+		}
+		fmt.Println(rp.ResumeCommand(*resumeSession, prompt))
 		return
 	}
 	if *printArgs {
@@ -59,8 +69,10 @@ func main() {
 	fmt.Fprintf(os.Stderr, "provider: %s\n", p.Name())
 	fmt.Fprintf(os.Stderr, "prompt:   %s\n\n", prompt)
 
-	err := harness.Run(ctx, p, prompt, func(ev harness.Event) {
+	handleEvent := func(ev harness.Event) {
 		switch ev.Type {
+		case harness.EventSessionID:
+			fmt.Fprintf(os.Stderr, "session:  %s\n", ev.SessionID)
 		case harness.EventText:
 			fmt.Print(ev.Text)
 		case harness.EventToolCallStart:
@@ -85,7 +97,14 @@ func main() {
 				)
 			}
 		}
-	})
+	}
+
+	var err error
+	if *resumeSession != "" {
+		err = harness.Resume(ctx, p, *resumeSession, prompt, handleEvent)
+	} else {
+		err = harness.Run(ctx, p, prompt, handleEvent)
+	}
 	cancel()
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)

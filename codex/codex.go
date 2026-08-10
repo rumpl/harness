@@ -20,12 +20,25 @@ func New(model string) harness.Provider {
 func (p *provider) Name() string { return "codex" }
 
 func (p *provider) PrintCommand(prompt string) string {
+	return p.printCommand("", prompt)
+}
+
+func (p *provider) ResumeCommand(sessionID, prompt string) string {
+	return p.printCommand(sessionID, prompt)
+}
+
+func (p *provider) printCommand(sessionID, prompt string) string {
 	modelFlag := ""
 	if p.model != "" {
 		modelFlag = " -m " + harness.ShellEscape(p.model)
 	}
+	verb := "codex exec"
+	if sessionID != "" {
+		verb += " resume " + harness.ShellEscape(sessionID)
+	}
 	return fmt.Sprintf(
-		"codex exec --json --dangerously-bypass-approvals-and-sandbox%s %s",
+		"%s --json --dangerously-bypass-approvals-and-sandbox%s %s",
+		verb,
 		modelFlag,
 		harness.ShellEscape(prompt),
 	)

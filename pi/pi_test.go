@@ -20,7 +20,7 @@ func TestPrintCommand(t *testing.T) {
 	t.Run("includes model and flags", func(t *testing.T) {
 		p := New("claude-sonnet-4-6")
 		cmd := p.PrintCommand("do something")
-		for _, want := range []string{"claude-sonnet-4-6", "--mode json", "--no-session", "-p"} {
+		for _, want := range []string{"claude-sonnet-4-6", "--mode json", "-p"} {
 			if !strings.Contains(cmd, want) {
 				t.Errorf("PrintCommand missing %q in %q", want, cmd)
 			}
@@ -50,6 +50,17 @@ func TestPrintCommand(t *testing.T) {
 			t.Errorf("PrintCommand should not contain --model: %q", cmd)
 		}
 	})
+
+	t.Run("persists fresh sessions and resumes by ID", func(t *testing.T) {
+		p := New("claude-sonnet-4-6").(harness.ResumableProvider)
+		if cmd := p.PrintCommand("first"); strings.Contains(cmd, "--no-session") {
+			t.Fatalf("fresh command disables sessions: %q", cmd)
+		}
+		cmd := p.ResumeCommand("session'id", "follow up")
+		if !strings.Contains(cmd, "--session 'session'\\''id'") {
+			t.Fatalf("resume command missing escaped session ID: %q", cmd)
+		}
+	})
 }
 
 func TestInteractiveArgs(t *testing.T) {
@@ -75,6 +86,13 @@ func TestInteractiveArgs(t *testing.T) {
 
 func TestParseStreamLine(t *testing.T) {
 	p := New("claude-sonnet-4-6")
+
+	t.Run("extracts session ID", func(t *testing.T) {
+		events := p.ParseStreamLine(jsonStr(map[string]any{"type": "session", "id": "pi-session"}))
+		if len(events) != 1 || events[0].Type != harness.EventSessionID || events[0].SessionID != "pi-session" {
+			t.Fatalf("unexpected events: %+v", events)
+		}
+	})
 
 	t.Run("extracts text from message_update text_delta", func(t *testing.T) {
 		line := jsonStr(map[string]any{

@@ -25,9 +25,12 @@ func main() {
 	// Create a provider — swap this line to switch agents.
 	p := dockeragent.New("coder")
 
+	var sessionID string
 	// Run the agent and handle streaming events.
 	harness.Run(context.Background(), p, "Explain goroutines", func(ev harness.Event) {
 		switch ev.Type {
+		case harness.EventSessionID:
+			sessionID = ev.SessionID
 		case harness.EventText:
 			fmt.Print(ev.Text)
 		case harness.EventToolCallStart:
@@ -42,7 +45,49 @@ func main() {
 			fmt.Printf("\nResult: %s\n", ev.Result)
 		}
 	})
+
+	// Continue the same conversation. This works with every built-in provider.
+	harness.Resume(context.Background(), p, sessionID, "Now show an example", func(ev harness.Event) {
+		if ev.Type == harness.EventText {
+			fmt.Print(ev.Text)
+		}
+	})
 }
+```
+
+### Resuming sessions
+
+Every built-in provider persists fresh sessions and emits an `EventSessionID` event. Save its `SessionID`, then pass it to the provider-independent `Resume` function:
+
+```go
+var sessionID string
+err := harness.Run(ctx, p, "Start the task", func(ev harness.Event) {
+	if ev.Type == harness.EventSessionID {
+		sessionID = ev.SessionID
+	}
+})
+if err != nil {
+	return err
+}
+
+return harness.Resume(ctx, p, sessionID, "Continue the task", handleEvent)
+```
+
+Session data remains owned by each agent CLI, so the resumed process must use the same working directory and have access to that CLI's normal session store. Third-party providers can opt in by implementing `harness.ResumableProvider`; providers with a custom streaming transport can additionally implement a matching `Resume` method.
+
+A complete runnable example starts a session, captures its ID, and immediately resumes it:
+
+```bash
+go run ./examples/resume -provider claude-code -model claude-sonnet-4-6
+```
+
+You can also select another provider:
+
+```bash
+go run ./examples/resume -provider codex -model gpt-5.4-mini
+go run ./examples/resume -provider pi -model claude-sonnet-4-6
+go run ./examples/resume -provider docker-agent -model coder
+go run ./examples/resume -provider opencode -model anthropic/claude-sonnet-4-6
 ```
 
 ### Switching providers
@@ -77,6 +122,11 @@ type Provider interface {
 	InteractiveArgs(prompt string) []string
 	ParseStreamLine(line string) []Event
 }
+
+type ResumableProvider interface {
+	Provider
+	ResumeCommand(sessionID, prompt string) string
+}
 ```
 
 | Method             | Purpose                                                           |
@@ -85,6 +135,7 @@ type Provider interface {
 | `PrintCommand()`   | Shell command for non-interactive mode (`sh -c` safe)             |
 | `InteractiveArgs()`| Arg list for interactive mode (first element = binary)            |
 | `ParseStreamLine()`| Parse one NDJSON line into `[]Event`                              |
+| `ResumeCommand()`  | Build a command that continues a session (optional interface)     |
 
 ## Event types
 
@@ -96,6 +147,8 @@ type Provider interface {
 | `EventToolCallDelta` | `ToolID` (opt), `ToolName` (opt), `ToolArgs` raw delta |
 | `EventToolCall`| `ToolID` (opt), `ToolName`, `ToolArgs` |
 | `EventToolResult` | `ToolID` (opt), `ToolName` (opt), `ToolOutput`, `ToolError` |
+| `EventReasoning` | `Reasoning` |
+| `EventSessionID` | `SessionID` |
 
 ## Example CLI
 
@@ -105,6 +158,9 @@ go run ./cmd/harness-example --provider claude-code --model claude-sonnet-4-6 "H
 go run ./cmd/harness-example --provider pi --model claude-sonnet-4-6 "Hello world"
 go run ./cmd/harness-example --provider codex --model gpt-5.4-mini "Hello world"
 go run ./cmd/harness-example --provider opencode --model anthropic/claude-sonnet-4-6 "Hello world"
+
+# Resume a session reported by an earlier run:
+go run ./cmd/harness-example --provider codex --model gpt-5.4-mini --resume <session-id> "Continue"
 
 # Just print the command without executing:
 go run ./cmd/harness-example --print-cmd --provider docker-agent --model coder "test"

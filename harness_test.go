@@ -157,6 +157,46 @@ func TestRunUsesCustomStreamingProvider(t *testing.T) {
 	}
 }
 
+type customResumeProvider struct {
+	customRunProvider
+
+	sessionID string
+}
+
+func (p *customResumeProvider) Resume(_ context.Context, sessionID, prompt string, fn func(Event)) error {
+	p.called = true
+	p.sessionID = sessionID
+	p.prompt = prompt
+	fn(Event{Type: EventSessionID, SessionID: sessionID})
+	return nil
+}
+
+func TestResumeUsesCustomStreamingProvider(t *testing.T) {
+	p := &customResumeProvider{}
+	var got Event
+	if err := Resume(testContext{}, p, "session-123", "follow up", func(ev Event) {
+		got = ev
+	}); err != nil {
+		t.Fatalf("Resume returned error: %v", err)
+	}
+	if !p.called || p.sessionID != "session-123" || p.prompt != "follow up" {
+		t.Fatalf("resume call = called:%v session:%q prompt:%q", p.called, p.sessionID, p.prompt)
+	}
+	if got.Type != EventSessionID || got.SessionID != "session-123" {
+		t.Fatalf("event = %+v, want session ID", got)
+	}
+}
+
+func TestResumeRejectsEmptyOrUnsupportedSession(t *testing.T) {
+	p := &customRunProvider{}
+	if err := Resume(testContext{}, p, "", "follow up", func(Event) {}); err == nil {
+		t.Fatal("expected empty session ID error")
+	}
+	if err := Resume(testContext{}, p, "session-123", "follow up", func(Event) {}); err == nil {
+		t.Fatal("expected unsupported provider error")
+	}
+}
+
 func TestParseJSON(t *testing.T) {
 	t.Run("valid JSON", func(t *testing.T) {
 		obj, ok := ParseJSON(`{"type":"test"}`)

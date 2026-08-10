@@ -56,6 +56,14 @@ func normalizeModel(model string) string {
 }
 
 func (p *provider) PrintCommand(prompt string) string {
+	return p.printCommand("", prompt)
+}
+
+func (p *provider) ResumeCommand(sessionID, prompt string) string {
+	return p.printCommand(sessionID, prompt)
+}
+
+func (p *provider) printCommand(sessionID, prompt string) string {
 	modelFlag := ""
 	if p.model != "" {
 		modelFlag = " --model " + harness.ShellEscape(p.model)
@@ -64,10 +72,15 @@ func (p *provider) PrintCommand(prompt string) string {
 	if p.effort != "" {
 		effortFlag = " --effort " + string(p.effort)
 	}
+	resumeFlag := ""
+	if sessionID != "" {
+		resumeFlag = " --resume " + harness.ShellEscape(sessionID)
+	}
 	return fmt.Sprintf(
-		"claude --print --verbose --dangerously-skip-permissions --include-partial-messages --output-format stream-json%s%s -p %s",
+		"claude --print --verbose --dangerously-skip-permissions --include-partial-messages --output-format stream-json%s%s%s -p %s",
 		modelFlag,
 		effortFlag,
+		resumeFlag,
 		harness.ShellEscape(prompt),
 	)
 }
