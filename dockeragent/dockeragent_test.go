@@ -102,7 +102,7 @@ func TestParseStreamLine(t *testing.T) {
 		})
 		events := p.ParseStreamLine(line)
 		assertEqual(t, events, []harness.Event{
-			{Type: harness.EventToolCall, ToolName: "shell", ToolArgs: `{"cmd": "ls -l"}`},
+			{Type: harness.EventToolCall, ToolID: "toolu_123", ToolName: "shell", ToolArgs: `{"cmd": "ls -l"}`},
 		})
 	})
 
