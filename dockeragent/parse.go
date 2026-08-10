@@ -7,9 +7,10 @@ import (
 )
 
 // parseStreamLine handles the Docker Agent JSON streaming format.
-// It recognises three event shapes:
+// It recognises these event shapes:
 //   - {"type":"agent_choice","content":"..."} → text events
-//   - {"type":"tool_call","tool_call":{"function":{"name":"...","arguments":"..."}}} → tool_call events
+//   - {"type":"tool_call","tool_call":{"id":"...","function":{"name":"...","arguments":"..."}}} → tool_call events
+//   - {"type":"tool_call_response","tool_call_id":"...","response":"..."} → tool_result events
 //   - {"type":"stream_stopped"} with prior token_usage → result events
 func parseStreamLine(line string) []harness.Event {
 	obj, ok := harness.ParseJSON(line)
@@ -30,6 +31,8 @@ func parseStreamLine(line string) []harness.Event {
 		return parseAgentChoice(obj)
 	case "tool_call":
 		return parseToolCall(obj)
+	case "tool_call_response":
+		return parseToolCallResponse(obj)
 	case "token_usage":
 		return parseTokenUsage(obj)
 	case "stream_stopped":
@@ -61,12 +64,53 @@ func parseToolCall(obj map[string]any) []harness.Event {
 	}
 
 	args, _ := fn["arguments"].(string)
+	id, _ := toolCall["id"].(string)
 
 	return []harness.Event{{
 		Type:     harness.EventToolCall,
+		ToolID:   id,
 		ToolName: name,
 		ToolArgs: args,
 	}}
+}
+
+// parseToolCallResponse turns docker-agent's terminal tool event into a
+// tool_result. docker-agent emits an intermediate "tool_call_output" and then
+// a final "tool_call_response"; only the response is parsed so the result is
+// not duplicated. The output text is in "response", with "result.output" as a
+// fallback for versions that only populate the structured result.
+func parseToolCallResponse(obj map[string]any) []harness.Event {
+	toolCallID, _ := obj["tool_call_id"].(string)
+
+	output, _ := obj["response"].(string)
+	if output == "" {
+		if result, ok := obj["result"].(map[string]any); ok {
+			output, _ = result["output"].(string)
+		}
+	}
+
+	var name string
+	if def, ok := obj["tool_definition"].(map[string]any); ok {
+		name, _ = def["name"].(string)
+	}
+
+	return []harness.Event{{
+		Type:       harness.EventToolResult,
+		ToolID:     toolCallID,
+		ToolName:   name,
+		ToolOutput: output,
+		ToolError:  toolCallErrored(obj),
+	}}
+}
+
+func toolCallErrored(obj map[string]any) bool {
+	if isError, ok := obj["is_error"].(bool); ok {
+		return isError
+	}
+	if isError, ok := obj["error"].(bool); ok {
+		return isError
+	}
+	return false
 }
 
 func parseTokenUsage(obj map[string]any) []harness.Event {

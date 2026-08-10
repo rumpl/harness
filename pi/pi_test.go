@@ -134,35 +134,58 @@ func TestParseStreamLine(t *testing.T) {
 
 	t.Run("extracts tool call from tool_execution_start", func(t *testing.T) {
 		line := jsonStr(map[string]any{
-			"type":              "tool_execution_start",
-			"tool_execution_id": "tool-1",
-			"tool_name":         "Bash",
-			"input":             map[string]any{"command": "npm test"},
+			"type":       "tool_execution_start",
+			"toolCallId": "tool-1",
+			"toolName":   "bash",
+			"args":       map[string]any{"command": "npm test"},
 		})
 		events := p.ParseStreamLine(line)
 		assertEqual(t, events, []harness.Event{
-			{Type: harness.EventToolCall, ToolID: "tool-1", ToolName: "Bash", ToolArgs: `{"command":"npm test"}`},
+			{Type: harness.EventToolCall, ToolID: "tool-1", ToolName: "bash", ToolArgs: `{"command":"npm test"}`},
 		})
 	})
 
-	t.Run("extracts tool result from tool_execution_result", func(t *testing.T) {
+	t.Run("extracts tool result from tool_execution_end", func(t *testing.T) {
 		line := jsonStr(map[string]any{
-			"type":              "tool_execution_result",
-			"tool_execution_id": "tool-1",
-			"tool_name":         "Bash",
-			"output":            "ok\n",
+			"type":       "tool_execution_end",
+			"toolCallId": "tool-1",
+			"toolName":   "bash",
+			"result": map[string]any{
+				"content": []any{
+					map[string]any{"type": "text", "text": "ok\n"},
+				},
+			},
+			"isError": false,
 		})
 		events := p.ParseStreamLine(line)
 		assertEqual(t, events, []harness.Event{
-			{Type: harness.EventToolResult, ToolID: "tool-1", ToolName: "Bash", ToolOutput: "ok\n"},
+			{Type: harness.EventToolResult, ToolID: "tool-1", ToolName: "bash", ToolOutput: "ok\n"},
+		})
+	})
+
+	t.Run("marks tool result errors", func(t *testing.T) {
+		line := jsonStr(map[string]any{
+			"type":       "tool_execution_end",
+			"toolCallId": "tool-2",
+			"toolName":   "bash",
+			"result": map[string]any{
+				"content": []any{
+					map[string]any{"type": "text", "text": "boom"},
+				},
+			},
+			"isError": true,
+		})
+		events := p.ParseStreamLine(line)
+		assertEqual(t, events, []harness.Event{
+			{Type: harness.EventToolResult, ToolID: "tool-2", ToolName: "bash", ToolOutput: "boom", ToolError: true},
 		})
 	})
 
 	t.Run("extracts unknown tools", func(t *testing.T) {
 		line := jsonStr(map[string]any{
-			"type":      "tool_execution_start",
-			"tool_name": "UnknownTool",
-			"input":     map[string]any{"foo": "bar"},
+			"type":     "tool_execution_start",
+			"toolName": "UnknownTool",
+			"args":     map[string]any{"foo": "bar"},
 		})
 		events := p.ParseStreamLine(line)
 		assertEqual(t, events, []harness.Event{
@@ -286,12 +309,12 @@ func TestParseStreamLine(t *testing.T) {
 		}
 	})
 
-	t.Run("handles tool_execution_start with missing input", func(t *testing.T) {
+	t.Run("handles tool_execution_start with missing args", func(t *testing.T) {
 		line := jsonStr(map[string]any{
-			"type":      "tool_execution_start",
-			"tool_name": "Bash",
+			"type":     "tool_execution_start",
+			"toolName": "bash",
 		})
-		assertEqual(t, p.ParseStreamLine(line), []harness.Event{{Type: harness.EventToolCall, ToolName: "Bash"}})
+		assertEqual(t, p.ParseStreamLine(line), []harness.Event{{Type: harness.EventToolCall, ToolName: "bash"}})
 	})
 
 	t.Run("independent model instances", func(t *testing.T) {

@@ -11,8 +11,8 @@ import (
 // parseStreamLine handles the Pi JSON streaming format.
 // It recognises these event shapes:
 //   - {"type":"message_update","assistantMessageEvent":{"type":"text_delta","delta":"..."}} → text events
-//   - {"type":"tool_execution_start",...} → tool_call events
-//   - {"type":"tool_execution_result",...} → tool_result events
+//   - {"type":"tool_execution_start","toolCallId":"...","toolName":"...","args":{...}} → tool_call events
+//   - {"type":"tool_execution_end","toolCallId":"...","toolName":"...","result":{"content":[...]},"isError":bool} → tool_result events
 //   - {"type":"agent_end","messages":[...]} → result events
 func parseStreamLine(line string) []harness.Event {
 	obj, ok := harness.ParseJSON(line)
@@ -33,7 +33,7 @@ func parseStreamLine(line string) []harness.Event {
 		return parseMessageUpdate(obj)
 	case "tool_execution_start":
 		return parseToolExecution(obj)
-	case "tool_execution_result", "tool_execution_end", "tool_execution_completed":
+	case "tool_execution_end":
 		return parseToolExecutionResult(obj)
 	case "agent_end":
 		return parseAgentEnd(obj)
@@ -58,14 +58,15 @@ func parseMessageUpdate(obj map[string]any) []harness.Event {
 }
 
 func parseToolExecution(obj map[string]any) []harness.Event {
-	toolName, ok := obj["tool_name"].(string)
-	if !ok || toolName == "" {
+	toolName, _ := obj["toolName"].(string)
+	if toolName == "" {
 		return nil
 	}
-	input, _ := obj["input"].(map[string]any)
+	input, _ := obj["args"].(map[string]any)
+	toolCallID, _ := obj["toolCallId"].(string)
 	return []harness.Event{{
 		Type:     harness.EventToolCall,
-		ToolID:   firstString(obj, "tool_execution_id", "tool_call_id", "id"),
+		ToolID:   toolCallID,
 		ToolName: toolName,
 		ToolArgs: jsonObjectString(input),
 	}}
@@ -83,42 +84,54 @@ func jsonObjectString(input map[string]any) string {
 }
 
 func parseToolExecutionResult(obj map[string]any) []harness.Event {
+	toolCallID, _ := obj["toolCallId"].(string)
+	toolName, _ := obj["toolName"].(string)
 	return []harness.Event{{
 		Type:       harness.EventToolResult,
-		ToolID:     firstString(obj, "tool_execution_id", "tool_call_id", "id"),
-		ToolName:   firstString(obj, "tool_name", "name"),
+		ToolID:     toolCallID,
+		ToolName:   toolName,
 		ToolOutput: toolExecutionOutput(obj),
 		ToolError:  toolExecutionErrored(obj),
 	}}
 }
 
+// toolExecutionOutput extracts the tool's textual output. Pi places it in
+// result.content, a list of typed content blocks such as
+// [{"type":"text","text":"..."}].
 func toolExecutionOutput(obj map[string]any) string {
-	if output := firstString(obj, "output", "result", "content", "stderr", "stdout"); output != "" {
-		return output
+	result, ok := obj["result"].(map[string]any)
+	if !ok {
+		return ""
 	}
-	if result, ok := obj["result"].(map[string]any); ok {
-		return firstString(result, "output", "content", "stderr", "stdout")
+	return contentBlocksText(result["content"])
+}
+
+// contentBlocksText concatenates the text of a Pi content-block array such as
+// [{"type":"text","text":"..."}]. Non-text blocks are ignored.
+func contentBlocksText(raw any) string {
+	blocks, ok := raw.([]any)
+	if !ok {
+		return ""
 	}
-	return ""
+	var out strings.Builder
+	for _, item := range blocks {
+		block, ok := item.(map[string]any)
+		if !ok {
+			continue
+		}
+		if bt, _ := block["type"].(string); bt != "" && bt != "text" {
+			continue
+		}
+		if text, ok := block["text"].(string); ok {
+			out.WriteString(text)
+		}
+	}
+	return out.String()
 }
 
 func toolExecutionErrored(obj map[string]any) bool {
-	if isError, ok := obj["is_error"].(bool); ok {
-		return isError
-	}
-	if _, ok := obj["error"].(string); ok {
-		return true
-	}
-	return false
-}
-
-func firstString(m map[string]any, keys ...string) string {
-	for _, key := range keys {
-		if value, ok := m[key].(string); ok {
-			return value
-		}
-	}
-	return ""
+	isError, _ := obj["isError"].(bool)
+	return isError
 }
 
 func parseAgentEnd(obj map[string]any) []harness.Event {
