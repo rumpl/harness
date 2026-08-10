@@ -21,6 +21,12 @@ func parseStreamLine(line string) []harness.Event {
 	typ, _ := obj["type"].(string)
 
 	switch typ {
+	case "thread.started":
+		sessionID, _ := obj["thread_id"].(string)
+		if sessionID == "" {
+			return nil
+		}
+		return []harness.Event{{Type: harness.EventSessionID, SessionID: sessionID}}
 	case "item.completed":
 		return parseItemCompleted(obj)
 	case "item.started":

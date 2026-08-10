@@ -51,6 +51,14 @@ func TestPrintCommand(t *testing.T) {
 			t.Errorf("PrintCommand should not contain -m: %q", cmd)
 		}
 	})
+
+	t.Run("resumes by escaped thread ID", func(t *testing.T) {
+		p := New("gpt-5.4-mini").(harness.ResumableProvider)
+		cmd := p.ResumeCommand("thread'id", "follow up")
+		if !strings.Contains(cmd, "codex exec resume 'thread'\\''id'") {
+			t.Fatalf("resume command missing escaped thread ID: %q", cmd)
+		}
+	})
 }
 
 func TestInteractiveArgs(t *testing.T) {
@@ -76,6 +84,13 @@ func TestInteractiveArgs(t *testing.T) {
 
 func TestParseStreamLine(t *testing.T) {
 	p := New("gpt-5.4-mini")
+
+	t.Run("extracts session ID from thread start", func(t *testing.T) {
+		events := p.ParseStreamLine(jsonStr(map[string]any{"type": "thread.started", "thread_id": "codex-thread"}))
+		if len(events) != 1 || events[0].Type != harness.EventSessionID || events[0].SessionID != "codex-thread" {
+			t.Fatalf("unexpected events: %+v", events)
+		}
+	})
 
 	t.Run("extracts text and result from item.completed agent_message", func(t *testing.T) {
 		line := jsonStr(map[string]any{

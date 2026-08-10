@@ -46,6 +46,14 @@ func TestPrintCommand(t *testing.T) {
 			t.Errorf("PrintCommand did not escape image: %q", cmd)
 		}
 	})
+
+	t.Run("resumes by escaped session ID", func(t *testing.T) {
+		p := New("coder").(harness.ResumableProvider)
+		cmd := p.ResumeCommand("session'id", "follow up")
+		if !strings.Contains(cmd, "--session 'session'\\''id'") {
+			t.Fatalf("resume command missing escaped session ID: %q", cmd)
+		}
+	})
 }
 
 func TestInteractiveArgs(t *testing.T) {
@@ -61,6 +69,13 @@ func TestInteractiveArgs(t *testing.T) {
 
 func TestParseStreamLine(t *testing.T) {
 	p := New("coder")
+
+	t.Run("extracts session ID from stream start", func(t *testing.T) {
+		events := p.ParseStreamLine(jsonStr(map[string]any{"type": "stream_started", "session_id": "docker-session"}))
+		if len(events) != 1 || events[0].Type != harness.EventSessionID || events[0].SessionID != "docker-session" {
+			t.Fatalf("unexpected events: %+v", events)
+		}
+	})
 
 	t.Run("extracts text from agent_choice", func(t *testing.T) {
 		line := jsonStr(map[string]any{

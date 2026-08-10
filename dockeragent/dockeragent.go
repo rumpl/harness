@@ -20,8 +20,21 @@ func New(image string) harness.Provider {
 func (p *provider) Name() string { return "docker-agent" }
 
 func (p *provider) PrintCommand(prompt string) string {
+	return p.printCommand("", prompt)
+}
+
+func (p *provider) ResumeCommand(sessionID, prompt string) string {
+	return p.printCommand(sessionID, prompt)
+}
+
+func (p *provider) printCommand(sessionID, prompt string) string {
+	sessionFlag := ""
+	if sessionID != "" {
+		sessionFlag = " --session " + harness.ShellEscape(sessionID)
+	}
 	return fmt.Sprintf(
-		"docker-agent run --json --exec --yolo %s %s",
+		"docker-agent run --json --exec --yolo%s %s %s",
+		sessionFlag,
 		harness.ShellEscape(p.image),
 		harness.ShellEscape(prompt),
 	)

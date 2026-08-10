@@ -45,6 +45,14 @@ func New(model string, opts ...Option) harness.Provider {
 func (p *provider) Name() string { return "opencode" }
 
 func (p *provider) PrintCommand(prompt string) string {
+	return p.printCommand("", prompt)
+}
+
+func (p *provider) ResumeCommand(sessionID, prompt string) string {
+	return p.printCommand(sessionID, prompt)
+}
+
+func (p *provider) printCommand(sessionID, prompt string) string {
 	extra := ""
 	if p.model != "" {
 		extra += " --model " + harness.ShellEscape(p.model)
@@ -54,6 +62,9 @@ func (p *provider) PrintCommand(prompt string) string {
 	}
 	if p.thinking {
 		extra += " --thinking"
+	}
+	if sessionID != "" {
+		extra += " --session " + harness.ShellEscape(sessionID)
 	}
 	return fmt.Sprintf(
 		"opencode run --format json --dangerously-skip-permissions%s %s",

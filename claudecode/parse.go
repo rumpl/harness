@@ -39,6 +39,15 @@ func (p *parser) parseLine(line string) []harness.Event {
 	typ, _ := obj["type"].(string)
 
 	switch typ {
+	case "system":
+		if subtype, _ := obj["subtype"].(string); subtype != "init" {
+			return nil
+		}
+		sessionID, _ := obj["session_id"].(string)
+		if sessionID == "" {
+			return nil
+		}
+		return []harness.Event{{Type: harness.EventSessionID, SessionID: sessionID}}
 	case "assistant":
 		return p.parseAssistant(obj)
 	case "user":

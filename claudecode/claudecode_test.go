@@ -87,6 +87,14 @@ func TestPrintCommand(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("resumes by escaped session ID", func(t *testing.T) {
+		p := New("claude-opus-4-6").(harness.ResumableProvider)
+		cmd := p.ResumeCommand("session'id", "follow up")
+		if !strings.Contains(cmd, "--resume 'session'\\''id'") {
+			t.Fatalf("resume command missing escaped session ID: %q", cmd)
+		}
+	})
 }
 
 func TestInteractiveArgs(t *testing.T) {
@@ -139,6 +147,15 @@ func TestInteractiveArgs(t *testing.T) {
 
 func TestParseStreamLine(t *testing.T) {
 	p := New("claude-opus-4-6")
+
+	t.Run("extracts session ID from init", func(t *testing.T) {
+		events := p.ParseStreamLine(jsonStr(map[string]any{
+			"type": "system", "subtype": "init", "session_id": "claude-session",
+		}))
+		if len(events) != 1 || events[0].Type != harness.EventSessionID || events[0].SessionID != "claude-session" {
+			t.Fatalf("unexpected events: %+v", events)
+		}
+	})
 
 	t.Run("extracts text from assistant message", func(t *testing.T) {
 		line := jsonStr(map[string]any{

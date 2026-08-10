@@ -79,6 +79,14 @@ func TestPrintCommand(t *testing.T) {
 			t.Errorf("PrintCommand should not contain --thinking: %q", cmd)
 		}
 	})
+
+	t.Run("resumes by escaped session ID", func(t *testing.T) {
+		p := New("anthropic/claude-3-5-sonnet").(harness.ResumableProvider)
+		cmd := p.ResumeCommand("session'id", "follow up")
+		if !strings.Contains(cmd, "--session 'session'\\''id'") {
+			t.Fatalf("resume command missing escaped session ID: %q", cmd)
+		}
+	})
 }
 
 func TestInteractiveArgs(t *testing.T) {
@@ -119,6 +127,16 @@ func TestInteractiveArgs(t *testing.T) {
 }
 
 func TestParseStreamLine(t *testing.T) {
+	t.Run("extracts session ID from step start", func(t *testing.T) {
+		p := New("anthropic/claude-3-5-sonnet")
+		events := p.ParseStreamLine(jsonStr(map[string]any{
+			"type": "step_start", "sessionID": "opencode-session",
+		}))
+		if len(events) != 1 || events[0].Type != harness.EventSessionID || events[0].SessionID != "opencode-session" {
+			t.Fatalf("unexpected events: %+v", events)
+		}
+	})
+
 	t.Run("emits text only when part has time.end", func(t *testing.T) {
 		p := New("anthropic/claude-3-5-sonnet")
 

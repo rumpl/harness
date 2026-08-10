@@ -1,5 +1,5 @@
 // Package harness provides a unified interface for interacting with different
-// AI coding agent CLIs (Claude Code, Pi, Codex). It abstracts away the
+// AI coding agent CLIs (Docker Agent, Claude Code, Pi, Codex, OpenCode). It abstracts away the
 // differences in command construction and stream output parsing so that
 // switching between agents requires minimal code changes.
 //
@@ -33,6 +33,17 @@ type Provider interface {
 	ParseStreamLine(line string) []Event
 }
 
+// ResumableProvider is implemented by providers whose CLI can continue an
+// existing session. All providers shipped by this module implement it.
+// Callers normally use [Resume] rather than invoking ResumeCommand directly.
+type ResumableProvider interface {
+	Provider
+
+	// ResumeCommand returns a shell command that sends prompt to sessionID.
+	// The returned string is safe to pass to "sh -c".
+	ResumeCommand(sessionID, prompt string) string
+}
+
 // EventType enumerates the kinds of events that a stream can produce.
 type EventType string
 
@@ -52,6 +63,9 @@ const (
 	// EventReasoning is emitted when the agent produces reasoning/thinking content.
 	// Not all providers support this; check provider documentation.
 	EventReasoning EventType = "reasoning"
+	// EventSessionID identifies the persistent session used by the run. Save
+	// SessionID and pass it to [Resume] to continue the conversation later.
+	EventSessionID EventType = "session_id"
 )
 
 // Event is a single parsed event from an agent's streaming output. Depending
@@ -66,11 +80,13 @@ const (
 //     the provider's JSON argument object when available.
 //   - EventToolResult:    ToolID (optional), ToolName (optional), ToolOutput,
 //     and ToolError are set.
-//   - EventReasoning: Reasoning is set.
+//   - EventReasoning:     Reasoning is set.
+//   - EventSessionID:     SessionID is set.
 type Event struct {
 	Type       EventType `json:"type"`
 	Text       string    `json:"text,omitempty"`
 	Result     string    `json:"result,omitempty"`
+	SessionID  string    `json:"session_id,omitempty"`
 	Usage      *Usage    `json:"usage,omitempty"`
 	ToolID     string    `json:"tool_id,omitempty"`
 	ToolName   string    `json:"name,omitempty"`
