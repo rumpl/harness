@@ -73,6 +73,33 @@ func (p *provider) printCommand(sessionID, prompt string) string {
 	)
 }
 
+// PrintArgs returns the executable and arguments for a fresh turn.
+func (p *provider) PrintArgs(prompt string) []string {
+	return p.printArgs("", prompt)
+}
+
+// ResumeArgs returns the executable and arguments for an existing session.
+func (p *provider) ResumeArgs(sessionID, prompt string) []string {
+	return p.printArgs(sessionID, prompt)
+}
+
+func (p *provider) printArgs(sessionID, prompt string) []string {
+	args := []string{"opencode", "run", "--format", "json", "--dangerously-skip-permissions"}
+	if p.model != "" {
+		args = append(args, "--model", p.model)
+	}
+	if p.agent != "" {
+		args = append(args, "--agent", p.agent)
+	}
+	if p.thinking {
+		args = append(args, "--thinking")
+	}
+	if sessionID != "" {
+		args = append(args, "--session", sessionID)
+	}
+	return append(args, prompt)
+}
+
 func (p *provider) InteractiveArgs(_ string) []string {
 	args := []string{"opencode"}
 	if p.model != "" {

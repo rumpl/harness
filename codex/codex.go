@@ -44,6 +44,28 @@ func (p *provider) printCommand(sessionID, prompt string) string {
 	)
 }
 
+// PrintArgs returns the executable and arguments for a fresh turn.
+func (p *provider) PrintArgs(prompt string) []string {
+	return p.printArgs("", prompt)
+}
+
+// ResumeArgs returns the executable and arguments for an existing session.
+func (p *provider) ResumeArgs(sessionID, prompt string) []string {
+	return p.printArgs(sessionID, prompt)
+}
+
+func (p *provider) printArgs(sessionID, prompt string) []string {
+	args := []string{"codex", "exec"}
+	if sessionID != "" {
+		args = append(args, "resume", sessionID)
+	}
+	args = append(args, "--json", "--dangerously-bypass-approvals-and-sandbox")
+	if p.model != "" {
+		args = append(args, "-m", p.model)
+	}
+	return append(args, prompt)
+}
+
 func (p *provider) InteractiveArgs(_ string) []string {
 	args := []string{"codex"}
 	if p.model != "" {

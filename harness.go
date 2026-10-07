@@ -44,6 +44,21 @@ type ResumableProvider interface {
 	ResumeCommand(sessionID, prompt string) string
 }
 
+// CommandProvider supplies an executable and arguments for shell-free execution.
+// Run prefers this interface over PrintCommand, making execution portable to
+// Windows without requiring a POSIX shell. The first element must be the binary.
+type CommandProvider interface {
+	Provider
+	PrintArgs(prompt string) []string
+}
+
+// ResumableCommandProvider supplies shell-free arguments for continuing a session.
+// Resume prefers this interface over ResumeCommand.
+type ResumableCommandProvider interface {
+	CommandProvider
+	ResumeArgs(sessionID, prompt string) []string
+}
+
 // EventType enumerates the kinds of events that a stream can produce.
 type EventType string
 

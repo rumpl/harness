@@ -73,6 +73,8 @@ if err != nil {
 return harness.Resume(ctx, p, sessionID, "Continue the task", handleEvent)
 ```
 
+Save a session ID as soon as it is emitted, even if the first run later fails or is canceled: that ID can still be used to resume. When resuming a known session, callers should avoid replacing its saved ID on failure. The library does not automatically retry failed turns, which may already have changed files or executed tools.
+
 Session data remains owned by each agent CLI, so the resumed process must use the same working directory and have access to that CLI's normal session store. Third-party providers can opt in by implementing `harness.ResumableProvider`; providers with a custom streaming transport can additionally implement a matching `Resume` method.
 
 A complete runnable example starts a session, captures its ID, and immediately resumes it:
@@ -113,6 +115,24 @@ The rest of your code stays exactly the same — all providers implement `harnes
 
 For providers whose CLIs have their own default model, pass an empty model string to omit the model flag entirely (for example, `codex.New("")` emits `codex exec ...` without `-m`).
 
+## Platform support
+
+Built-in providers launch executables directly with argument lists on Linux, macOS, and Windows; `Run` and `Resume` do not require `sh`, Git Bash, or shell interpolation. Install the provider's CLI for your platform and make its executable available on `PATH`. OpenCode's HTTP/SSE transport also launches its server directly.
+
+`PrintCommand` and `ResumeCommand` still return POSIX shell strings for callers that explicitly want them; those strings are not Windows command lines. Third-party providers can implement `CommandProvider` (`PrintArgs`) and `ResumableCommandProvider` (`ResumeArgs`) for shell-free execution. Legacy providers that only supply shell strings still require `sh`.
+
+CI runs native subprocess tests on Linux, macOS, and Windows, including argument preservation, cancellation, and early stdout EOF. Windows cancellation currently terminates only the direct subprocess, not its descendants; inherited stdout is still closed after the bounded drain window.
+
+## Streaming and failures
+
+Command-based providers (Docker Agent, Claude Code, Pi, and Codex) accept output lines up to 16 MiB, excluding the newline. Larger lines are rejected immediately, and the subprocess is canceled rather than allowed to block writing unread output. Callbacks are synchronous and must return; time spent in callbacks does not consume the two-second post-exit pipe-drain budget. Reader goroutines are joined before returning.
+
+On Unix, cancellation terminates the entire process group, including tool subprocesses holding stdout open. This is best effort (numeric process-group IDs can be reused by the OS). On other platforms, only the direct subprocess is killed. Stderr is discarded, and Codex validation errors omit raw stream contents to avoid leaking credentials.
+
+Codex runs via `codex exec --json`. Both `Run` and `Resume` require `turn.completed` for success, along with a successful process exit. `turn.failed`, malformed JSON envelopes, missing event types, and EOF before completion are errors. Transient `error` events (such as reconnection warnings) and unknown typed events do not fail an otherwise completed turn. An `EventResult` containing agent text is not itself proof of successful completion; check the returned error. Direct `ParseStreamLine` calls retain their permissive parsing behavior.
+
+OpenCode uses its own HTTP/SSE transport, which already has a 16 MiB line limit.
+
 ## The `Provider` interface
 
 ```go
@@ -124,8 +144,18 @@ type Provider interface {
 }
 
 type ResumableProvider interface {
-	Provider
-	ResumeCommand(sessionID, prompt string) string
+ Provider
+ ResumeCommand(sessionID, prompt string) string
+}
+
+type CommandProvider interface {
+ Provider
+ PrintArgs(prompt string) []string
+}
+
+type ResumableCommandProvider interface {
+ CommandProvider
+ ResumeArgs(sessionID, prompt string) []string
 }
 ```
 
