@@ -73,6 +73,8 @@ if err != nil {
 return harness.Resume(ctx, p, sessionID, "Continue the task", handleEvent)
 ```
 
+Save a session ID as soon as it is emitted, even if the first run later fails or is canceled: that ID can still be used to resume. When resuming a known session, callers should avoid replacing its saved ID on failure. The library does not automatically retry failed turns, which may already have changed files or executed tools.
+
 Session data remains owned by each agent CLI, so the resumed process must use the same working directory and have access to that CLI's normal session store. Third-party providers can opt in by implementing `harness.ResumableProvider`; providers with a custom streaming transport can additionally implement a matching `Resume` method.
 
 A complete runnable example starts a session, captures its ID, and immediately resumes it:
@@ -112,6 +114,16 @@ p := opencode.New("anthropic/claude-sonnet-4-6")
 The rest of your code stays exactly the same — all providers implement `harness.Provider`.
 
 For providers whose CLIs have their own default model, pass an empty model string to omit the model flag entirely (for example, `codex.New("")` emits `codex exec ...` without `-m`).
+
+## Streaming and failures
+
+Command-based providers (Docker Agent, Claude Code, Pi, and Codex) accept output lines up to 16 MiB, excluding the newline. Larger lines are rejected immediately, and the subprocess is canceled rather than allowed to block writing unread output. Callbacks are synchronous and must return; time spent in callbacks does not consume the two-second post-exit pipe-drain budget. Reader goroutines are joined before returning.
+
+On Unix, cancellation terminates the entire process group, including tool subprocesses holding stdout open. This is best effort (numeric process-group IDs can be reused by the OS). On other platforms, only the direct subprocess is killed. Stderr is discarded, and Codex validation errors omit raw stream contents to avoid leaking credentials.
+
+Codex runs via `codex exec --json`. Both `Run` and `Resume` require `turn.completed` for success, along with a successful process exit. `turn.failed`, malformed JSON envelopes, missing event types, and EOF before completion are errors. Transient `error` events (such as reconnection warnings) and unknown typed events do not fail an otherwise completed turn. An `EventResult` containing agent text is not itself proof of successful completion; check the returned error. Direct `ParseStreamLine` calls retain their permissive parsing behavior.
+
+OpenCode uses its own HTTP/SSE transport, which already has a 16 MiB line limit.
 
 ## The `Provider` interface
 
