@@ -32,7 +32,8 @@ func (p *provider) printCommand(sessionID, prompt string) string {
 	if p.model != "" {
 		modelFlag = " -m " + harness.ShellEscape(p.model)
 	}
-	verb := "codex exec"
+	// Replace the launcher shell so it cannot retain stdout after Codex closes it.
+	verb := "exec codex exec"
 	if sessionID != "" {
 		verb += " resume " + harness.ShellEscape(sessionID)
 	}
