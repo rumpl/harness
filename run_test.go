@@ -128,3 +128,24 @@ func TestCommandFailureAndCancellation(t *testing.T) {
 		}
 	})
 }
+
+type argsProvider struct {
+	commandProvider
+
+	args []string
+}
+
+func (p argsProvider) PrintArgs(string) []string          { return p.args }
+func (p argsProvider) ResumeArgs(string, string) []string { return p.args }
+
+func TestEmptyCommandArgs(t *testing.T) {
+	for _, args := range [][]string{nil, {""}} {
+		p := argsProvider{args: args}
+		if err := Run(t.Context(), p, "", func(Event) {}); err == nil || !strings.Contains(err.Error(), "executable is empty") {
+			t.Fatalf("Run error = %v", err)
+		}
+		if err := Resume(t.Context(), p, "session", "", func(Event) {}); err == nil || !strings.Contains(err.Error(), "executable is empty") {
+			t.Fatalf("Resume error = %v", err)
+		}
+	}
+}

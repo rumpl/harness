@@ -23,8 +23,8 @@ func TestPrintCommand(t *testing.T) {
 		if !strings.Contains(cmd, "gpt-5.4-mini") {
 			t.Errorf("PrintCommand missing model: %q", cmd)
 		}
-		if !strings.HasPrefix(cmd, "exec codex exec ") {
-			t.Errorf("PrintCommand must replace the launcher shell: %q", cmd)
+		if !strings.HasPrefix(cmd, "codex exec ") {
+			t.Errorf("PrintCommand missing Codex command: %q", cmd)
 		}
 		if !strings.Contains(cmd, "--json") {
 			t.Errorf("PrintCommand missing --json: %q", cmd)
@@ -58,7 +58,7 @@ func TestPrintCommand(t *testing.T) {
 	t.Run("resumes by escaped thread ID", func(t *testing.T) {
 		p := New("gpt-5.4-mini").(harness.ResumableProvider)
 		cmd := p.ResumeCommand("thread'id", "follow up")
-		if !strings.HasPrefix(cmd, "exec codex exec resume 'thread'\\''id'") {
+		if !strings.HasPrefix(cmd, "codex exec resume 'thread'\\''id'") {
 			t.Fatalf("resume command missing escaped thread ID: %q", cmd)
 		}
 	})

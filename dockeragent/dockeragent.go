@@ -40,6 +40,24 @@ func (p *provider) printCommand(sessionID, prompt string) string {
 	)
 }
 
+// PrintArgs returns the executable and arguments for a fresh turn.
+func (p *provider) PrintArgs(prompt string) []string {
+	return p.printArgs("", prompt)
+}
+
+// ResumeArgs returns the executable and arguments for an existing session.
+func (p *provider) ResumeArgs(sessionID, prompt string) []string {
+	return p.printArgs(sessionID, prompt)
+}
+
+func (p *provider) printArgs(sessionID, prompt string) []string {
+	args := []string{"docker-agent", "run", "--json", "--exec", "--yolo"}
+	if sessionID != "" {
+		args = append(args, "--session", sessionID)
+	}
+	return append(args, p.image, prompt)
+}
+
 func (p *provider) InteractiveArgs(_ string) []string {
 	return []string{"docker-agent", "run", "--yolo", p.image}
 }

@@ -9,8 +9,15 @@ permissions:
 
 jobs:
   test:
-    name: Go
-    runs-on: ubuntu-latest
+    name: Go (${{ matrix.os }})
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        shell: bash
 
     steps:
       - name: Checkout

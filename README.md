@@ -115,6 +115,14 @@ The rest of your code stays exactly the same — all providers implement `harnes
 
 For providers whose CLIs have their own default model, pass an empty model string to omit the model flag entirely (for example, `codex.New("")` emits `codex exec ...` without `-m`).
 
+## Platform support
+
+Built-in providers launch executables directly with argument lists on Linux, macOS, and Windows; `Run` and `Resume` do not require `sh`, Git Bash, or shell interpolation. Install the provider's CLI for your platform and make its executable available on `PATH`. OpenCode's HTTP/SSE transport also launches its server directly.
+
+`PrintCommand` and `ResumeCommand` still return POSIX shell strings for callers that explicitly want them; those strings are not Windows command lines. Third-party providers can implement `CommandProvider` (`PrintArgs`) and `ResumableCommandProvider` (`ResumeArgs`) for shell-free execution. Legacy providers that only supply shell strings still require `sh`.
+
+CI runs native subprocess tests on Linux, macOS, and Windows, including argument preservation, cancellation, and early stdout EOF. Windows cancellation currently terminates only the direct subprocess, not its descendants; inherited stdout is still closed after the bounded drain window.
+
 ## Streaming and failures
 
 Command-based providers (Docker Agent, Claude Code, Pi, and Codex) accept output lines up to 16 MiB, excluding the newline. Larger lines are rejected immediately, and the subprocess is canceled rather than allowed to block writing unread output. Callbacks are synchronous and must return; time spent in callbacks does not consume the two-second post-exit pipe-drain budget. Reader goroutines are joined before returning.
@@ -136,8 +144,18 @@ type Provider interface {
 }
 
 type ResumableProvider interface {
-	Provider
-	ResumeCommand(sessionID, prompt string) string
+ Provider
+ ResumeCommand(sessionID, prompt string) string
+}
+
+type CommandProvider interface {
+ Provider
+ PrintArgs(prompt string) []string
+}
+
+type ResumableCommandProvider interface {
+ CommandProvider
+ ResumeArgs(sessionID, prompt string) []string
 }
 ```
 

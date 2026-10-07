@@ -35,6 +35,9 @@ func Run(ctx context.Context, p Provider, prompt string, fn func(Event)) error {
 	if sp, ok := p.(streamingProvider); ok {
 		return sp.Run(ctx, prompt, fn)
 	}
+	if cp, ok := p.(CommandProvider); ok {
+		return runArgs(ctx, p, cp.PrintArgs(prompt), fn)
+	}
 	return runCommand(ctx, p, p.PrintCommand(prompt), fn)
 }
 
@@ -48,6 +51,9 @@ func Resume(ctx context.Context, p Provider, sessionID, prompt string, fn func(E
 	}
 	if sp, ok := p.(resumingStreamingProvider); ok {
 		return sp.Resume(ctx, sessionID, prompt, fn)
+	}
+	if cp, ok := p.(ResumableCommandProvider); ok {
+		return runArgs(ctx, p, cp.ResumeArgs(sessionID, prompt), fn)
 	}
 	rp, ok := p.(ResumableProvider)
 	if !ok {
@@ -75,9 +81,16 @@ type streamValidatingProvider interface {
 }
 
 func runCommand(ctx context.Context, p Provider, command string, fn func(Event)) error {
+	return runArgs(ctx, p, []string{"sh", "-c", command}, fn)
+}
+
+func runArgs(ctx context.Context, p Provider, args []string, fn func(Event)) error {
+	if len(args) == 0 || args[0] == "" {
+		return errors.New("command: executable is empty")
+	}
 	runCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	cmd := exec.CommandContext(runCtx, "sh", "-c", command)
+	cmd := exec.CommandContext(runCtx, args[0], args[1:]...)
 	configureProcess(cmd)
 	cmd.WaitDelay = streamDrainTimeout
 	// Own the pipe: Cmd.Wait must not close stdout before buffered events are read.
