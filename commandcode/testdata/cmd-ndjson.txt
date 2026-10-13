@@ -1,0 +1,20 @@
+{"type":"event","event":{"type":"run_start","sessionId":"a52eea0d-c51e-41be-8381-19f377f71367"}}
+{"type":"event","event":{"type":"turn_start","turnNumber":1}}
+{"type":"event","event":{"type":"message_start"}}
+{"type":"event","event":{"type":"model_request_start","model":"deepseek/deepseek-v4.1-flash"}}
+{"type":"event","event":{"type":"model_trace","traceId":"85af997a3ce99e37f45d1a815798983e"}}
+{"type":"event","event":{"type":"thinking_start"}}
+{"type":"event","event":{"type":"thinking_delta","delta":"The"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" user wants"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" exactly"}}
+{"type":"event","event":{"type":"thinking_delta","delta":" \""}}
+{"type":"event","event":{"type":"thinking_delta","delta":"OK"}}
+{"type":"event","event":{"type":"thinking_delta","delta":"\"."}}
+{"type":"event","event":{"type":"thinking_end","text":"The user wants exactly \"OK\"."}}
+{"type":"event","event":{"type":"text_delta","delta":"OK"}}
+{"type":"event","event":{"type":"message_update","content":[{"type":"thinking","thinking":"The user wants exactly \"OK\".","signature":""},{"type":"text","text":"OK"}]}}
+{"type":"event","event":{"type":"model_request_end","model":"deepseek/deepseek-v4.1-flash","usage":{"inputTokens":19928,"outputTokens":9,"cacheReadTokens":4096,"cacheWriteTokens":0},"stopReason":"stop","effort":"low"}}
+{"type":"event","event":{"type":"message_end","content":[{"type":"thinking","thinking":"The user wants exactly \"OK\".","signature":""},{"type":"text","text":"OK"}]}}
+{"type":"event","event":{"type":"turn_end","turnNumber":1,"hadToolCalls":false,"usage":{"inputTokens":19928,"outputTokens":9,"cacheReadTokens":4096,"cacheWriteTokens":0}}}
+{"type":"event","event":{"type":"run_end","result":{"finalText":"OK","stopReason":"end_turn","turnCount":1,"usage":{"inputTokens":19928,"outputTokens":9,"cacheReadTokens":4096,"cacheWriteTokens":0},"systemPromptTokens":null,"nextState":{"sessionId":"a52eea0d-c51e-41be-8381-19f377f71367","messages":[{"role":"user","content":[{"type":"text","text":"reply with exactly: OK"}],"meta":{"source":"user","createdAt":1791882199958,"messageId":"bd4f38e1-ac12-406f-8826-f5b353fd96de"}},{"role":"assistant","content":[{"type":"thinking","thinking":"The user wants exactly \"OK\".","signature":""},{"type":"text","text":"OK"}],"meta":{"source":"model","createdAt":1791882202691,"messageId":"184c41a4-e8e4-400b-a821-0606f350ac39"}}],"interrupted":false,"modState":{"workspace":{"cwd":"/tmp","platform":"linux","branch":null,"gitStatus":null,"recentCommits":[],"additionalDirectories":[]},"compaction":{"tokens":19955,"basis":{"role":"assistant","content":[{"type":"thinking","thinking":"The user wants exactly \"OK\".","signature":""},{"type":"text","text":"OK"}],"meta":{"source":"model","createdAt":1791882202691,"messageId":"184c41a4-e8e4-400b-a821-0606f350ac39"}}}}}}}}
+{"type":"result","subtype":"success","sessionId":"a52eea0d-c51e-41be-8381-19f377f71367","stopReason":"end_turn","usage":{"inputTokens":19928,"outputTokens":9,"cacheReadTokens":4096,"cacheWriteTokens":0},"durationMs":5128,"finalText":"OK"}

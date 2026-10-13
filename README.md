@@ -1,6 +1,6 @@
 # harness
 
-A Go library for calling different AI coding agent CLIs (Docker Agent, Claude Code, Pi, Codex, opencode) through a unified interface. Switch between agents by changing a single line of code.
+A Go library for calling different AI coding agent CLIs (Docker Agent, Claude Code, Pi, Codex, opencode, Command Code) through a unified interface. Switch between agents by changing a single line of code.
 
 ## Install
 
@@ -109,11 +109,34 @@ p := codex.New("gpt-5.4-mini")
 
 // opencode
 p := opencode.New("anthropic/claude-sonnet-4-6")
+
+// Command Code
+p := commandcode.New("deepseek/deepseek-v4.1-flash")
 ```
 
 The rest of your code stays exactly the same — all providers implement `harness.Provider`.
 
 For providers whose CLIs have their own default model, pass an empty model string to omit the model flag entirely (for example, `codex.New("")` emits `codex exec ...` without `-m`).
+
+## Command Code
+
+`commandcode` runs the [Command Code](https://commandcode.ai) CLI (`cmd`) with
+`cmd -p --output-format json`, and maps its newline-delimited JSON onto the
+library's events: text, reasoning, tool calls and results, the session id, and
+token usage.
+
+| Need | `cmd` |
+| --- | --- |
+| non-interactive run | `-p` |
+| machine-readable stream | `--output-format json` |
+| session id | `run_start.sessionId` |
+| resume | `-r` |
+| model / reasoning effort | `-m` / `--effort` |
+| no permission prompts | `--yolo` |
+
+```go
+p := commandcode.New("deepseek/deepseek-v4.1-flash", commandcode.WithEffort(commandcode.EffortHigh))
+```
 
 ## Platform support
 
